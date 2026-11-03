@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model WatchRequest {
+  id                  String   @id @default(uuid())
+  fullName            String
+  phoneNumber         String
+  whatsappNumber      String?
+  email               String
+  brand               String
+  modelName           String
+  referenceNumber     String?
+  productUrl          String?
+  budgetRange         String?
+  condition           String?
+  timeline            String?
+  specialRequirements String?
+  preferredColor      String?
+  dialColor           String?
+  strapPreference     String?
+  materialPreference  String?
+  status              String   @default("New Request")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Product {
+  id                   String   @id @default(uuid())
+  name                 String
+  brand                String
+  price                Float
+  description          String
+  imageUrl             String?
+  inStock              Boolean  @default(true)
+  quantity             Int      @default(1)
+  expectedDeliveryDate DateTime?
+  preBookingAvailable  Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  
+  categoryId           String
+  category             Category @relation(fields: [categoryId], references: [id])
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  slug      String    @unique
+  products  Product[]
+}
+
+model Waitlist {
+  id               String   @id @default(uuid())
+  name             String
+  email            String
+  whatsapp         String?
+  requestedProduct String
+  notified         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  phone        String?
+  role         String    @default("CUSTOMER") // "CUSTOMER" or "ADMIN"
+  address      String?
+  city         String?
+  state        String?
+  pincode      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  orders       Order[]
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  customerName    String
+  customerPhone   String
+  customerEmail   String?
+  shippingAddress String
+  city            String?
+  state           String?
+  pincode         String?
+  paymentMethod   String      @default("cod")
+  paymentStatus   String      @default("pending")
+  orderStatus     String      @default("Pending") // Pending, Confirmed, Dispatched, Delivered, Cancelled
+  subtotal        Float
+  discountAmount  Float       @default(0)
+  promoCode       String?
+  shippingCost    Float       @default(0)
+  shippingMethod  String      @default("standard")
+  taxAmount       Float       @default(0)
+  totalAmount     Float
+  notes           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  items           OrderItem[]
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  productName String
+  brand       String
+  price       Float
+  quantity    Int      @default(1)
+  imageUrl    String?
+}

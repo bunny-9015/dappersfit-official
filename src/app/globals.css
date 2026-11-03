@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: var(--font-cinzel), 'Cinzel', 'Times New Roman', serif;
+  --font-serif: var(--font-playfair), 'Playfair Display', Georgia, serif;
+  --font-brand: var(--font-montserrat), 'Montserrat', system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-tech: var(--font-space), 'Space Grotesk', monospace;
+}
+
+.font-display {
+  font-family: var(--font-cinzel), 'Cinzel', 'Times New Roman', serif;
+}
+
+.font-serif {
+  font-family: var(--font-playfair), 'Playfair Display', Georgia, serif;
+}
+
+.font-brand {
+  font-family: var(--font-montserrat), 'Montserrat', system-ui, sans-serif;
+}
+
+.font-sans {
+  font-family: var(--font-jakarta), 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.font-tech {
+  font-family: var(--font-space), 'Space Grotesk', monospace;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  @apply antialiased;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* GPU Hardware Acceleration & Frame Rate Booster */
+.gpu-layer {
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Content Visibility: Drastically speeds up rendering and scrolling on large product lists */
+.product-card-perf {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 420px;
+}
