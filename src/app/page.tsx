@@ -12,13 +12,26 @@ export default async function Home({
   const resolvedParams = searchParams ? await searchParams : {};
   const initialBrand = resolvedParams?.brand || "";
 
-  const categories = await prisma.category.findMany({
-    orderBy: { name: "asc" },
-  });
+  let categories: any[] = [];
+  let products: any[] = [];
 
-  const products = await prisma.product.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  try {
+    categories = await prisma.category.findMany({
+      orderBy: { name: "asc" },
+    });
+    products = await prisma.product.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (error) {
+    console.error("Database query error on homepage, activating resilient fallback:", error);
+    try {
+      const seedData = require("../../prisma/supabase_seed_data.json");
+      categories = seedData.categories || [];
+      products = seedData.products || [];
+    } catch (e) {
+      console.error("Failed to load fallback catalog:", e);
+    }
+  }
 
   return (
     <div className="bg-white text-gray-900 min-h-screen scroll-smooth">
