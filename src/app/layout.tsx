@@ -57,7 +57,7 @@ import CartDrawer from "@/components/CartDrawer";
 import FloatingCartButton from "@/components/FloatingCartButton";
 import NavbarCartButton from "@/components/NavbarCartButton";
 import { getCurrentSession } from "@/lib/auth";
-import { getWhatsAppChatUrl, DEFAULT_WHATSAPP_NUMBER } from "@/lib/whatsapp";
+import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 
 export default async function RootLayout({
   children,

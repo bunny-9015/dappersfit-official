@@ -1,15 +1,38 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
-import { useCart } from "@/context/CartContext";
+import { useCart, COD_EXTRA_CHARGE, COD_ADVANCE_COLLECTION } from "@/context/CartContext";
 import { createOrder } from "@/app/actions";
 import PriceTag from "./PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
+import { isAutomaticWatch } from "@/lib/brandUtils";
 
 const fmt = (val: number | string | undefined | null) => {
   const n = Number(val);
   return isNaN(n) ? "0" : n.toLocaleString("en-IN");
+};
+
+const loadYoupiSDK = (portalUrl = "http://localhost:7000"): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve(false);
+    if (window.Youpi) return resolve(true);
+
+    const existing = document.getElementById("youpi-sdk-script");
+    if (existing) {
+      if (window.Youpi) return resolve(true);
+      existing.addEventListener("load", () => resolve(true));
+      existing.addEventListener("error", () => resolve(false));
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "youpi-sdk-script";
+    script.src = `${portalUrl.replace(/\/+$/, "")}/youpi.js`;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 };
 
 export default function CartDrawer() {
@@ -54,6 +77,22 @@ export default function CartDrawer() {
 
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
   const [orderId, setOrderId] = useState("");
+  const [paymentId, setPaymentId] = useState("");
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
+  const [confirmedWhatsAppMsg, setConfirmedWhatsAppMsg] = useState<string>("");
+  const [showSandboxModal, setShowSandboxModal] = useState(false);
+  const [utrInput, setUtrInput] = useState("");
+  const [sandboxOrderData, setSandboxOrderData] = useState<{
+    orderId: string;
+    orderNumber: string;
+    amount: number;
+    payeeVpa?: string;
+    payeeName?: string;
+    upiUri?: string;
+    checkoutUrl?: string;
+  } | null>(null);
 
   // Validate checkout form
   const validateForm = () => {
@@ -70,15 +109,31 @@ export default function CartDrawer() {
     return Object.keys(errors).length === 0;
   };
 
+  const isCodSelected = formData.paymentMethod === "cod";
+  const codChargeAmount = isCodSelected ? COD_EXTRA_CHARGE : 0;
+  const effectiveShippingCost = isCodSelected ? shippingCost : 0; // Prepaid Free Ship!
+  const effectiveFinalTotal = Math.max(0, subtotal - discountAmount + effectiveShippingCost + codChargeAmount);
+  const balanceOnDeliveryAmount = isCodSelected ? Math.max(0, effectiveFinalTotal - COD_ADVANCE_COLLECTION) : 0;
+
   // WhatsApp order formatting
-  const generateWhatsAppMessage = (currentOrderId?: string) => {
+  const generateWhatsAppMessage = (
+    currentOrderId?: string,
+    payStatusText?: string,
+    payRefId?: string
+  ) => {
     const id = currentOrderId || `DF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const isCod = formData.paymentMethod === "cod";
+    const totalWithCod = Math.max(
+      0,
+      subtotal - discountAmount + (isCod ? shippingCost + COD_EXTRA_CHARGE : 0)
+    );
     let message = `*👑 DAPPERSFIT LUXURY TIMEPIECES - ORDER #${id} 👑*\n\n`;
 
     message += `*📋 ORDER SUMMARY:*\n`;
     items.forEach((item, index) => {
       const brandStr = (item.brand || "Luxury").toUpperCase();
-      message += `${index + 1}. *${brandStr}* - ${item.name || "Watch"}\n`;
+      const autoTag = isAutomaticWatch(item) ? " [⚙️ AUTOMATIC]" : "";
+      message += `${index + 1}. *${brandStr}* - ${item.name || "Watch"}${autoTag}\n`;
       message += `   Qty: ${item.quantity || 1} × ₹${fmt(item.price)}\n`;
       message += `   Item Total: ₹${fmt((item.quantity || 1) * (item.price || 0))}\n`;
     });
@@ -91,9 +146,18 @@ export default function CartDrawer() {
     if (appliedPromo) {
       message += `• Promo Code (${appliedPromo.code}): -₹${fmt(discountAmount)}\n`;
     }
-    message += `• Shipping: ${shippingCost === 0 ? "FREE Standard" : `₹${shippingCost} (Priority Air)`}\n`;
-    message += `• Taxes: GST 18% (Included)\n`;
-    message += `• *TOTAL PAYABLE: ₹${fmt(finalTotal)}*\n\n`;
+    if (isCod) {
+      message += `• Shipping: ${shippingCost === 0 ? "FREE Standard" : `₹${shippingCost} (Priority Air)`}\n`;
+      message += `• COD Charges: +₹${COD_EXTRA_CHARGE} (Note: ₹300 COD charges)\n`;
+      message += `• Taxes: GST 18% (Included)\n`;
+      message += `• *TOTAL ORDER AMOUNT: ₹${fmt(totalWithCod)}*\n`;
+      message += `• *COD ADVANCE COLLECTION PAID: ₹${fmt(COD_ADVANCE_COLLECTION)}*\n`;
+      message += `• *BALANCE PAYABLE ON DELIVERY: ₹${fmt(Math.max(0, totalWithCod - COD_ADVANCE_COLLECTION))}*\n\n`;
+    } else {
+      message += `• Shipping: FREE (Prepaid Free Shipping)\n`;
+      message += `• Taxes: GST 18% (Included)\n`;
+      message += `• *TOTAL PREPAID AMOUNT: ₹${fmt(totalWithCod)}*\n\n`;
+    }
 
     if (formData.fullName || formData.phone || formData.address) {
       message += `*📍 DELIVERY DETAILS:*\n`;
@@ -105,94 +169,317 @@ export default function CartDrawer() {
       }
       message += `• Payment Choice: ${
         formData.paymentMethod === "cod"
-          ? "Cash on Delivery (COD)"
+          ? "Cash on Delivery (₹300 Advance Collection • Note: ₹300 COD Charges)"
           : formData.paymentMethod === "upi"
-          ? "Instant UPI / QR"
-          : "Credit/Debit Card"
+          ? "Prepaid Instant UPI / QR (Free Shipping)"
+          : "Prepaid Credit/Debit Card (Free Shipping)"
       }\n`;
+      if (payStatusText) {
+        message += `• Payment Status: ${payStatusText}\n`;
+      }
+      if (payRefId) {
+        message += `• Transaction ID: ${payRefId}\n`;
+      }
     }
 
     message += `\nPlease confirm availability and dispatch schedule. Thank you!`;
     return message;
   };
 
-  const handleWhatsAppOrder = async () => {
-    const id = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
-    try {
-      await createOrder({
-        orderNumber: id,
-        customerName: formData.fullName || "WhatsApp Customer",
-        customerPhone: formData.phone || "Direct Chat",
-        shippingAddress: formData.address || "Pending via WhatsApp Chat",
-        city: formData.city || undefined,
-        state: formData.state || undefined,
-        pincode: formData.pincode || undefined,
-        paymentMethod: formData.paymentMethod || "cod",
-        subtotal: subtotal,
-        discountAmount: discountAmount,
-        promoCode: appliedPromo?.code || undefined,
-        shippingCost: shippingCost,
-        shippingMethod: shippingMethod,
-        taxAmount: taxAmount,
-        totalAmount: finalTotal,
-        items: items.map((it) => ({
-          productId: it.id,
-          productName: it.name,
-          brand: it.brand || "Luxury",
-          price: it.price,
-          quantity: it.quantity,
-          imageUrl: it.imageUrl,
-        })),
-      });
-    } catch (err) {
-      console.error("Order save err:", err);
-    }
-    const msg = generateWhatsAppMessage(id);
+  // Direct WhatsApp Inquiry (does NOT create a premature order in Admin DB)
+  const handleWhatsAppOrder = () => {
+    const msg = generateWhatsAppMessage(undefined, "Direct WhatsApp Concierge Inquiry");
+    window.open(getWhatsAppChatUrl(msg), "_blank");
+  };
+
+  const finalizeVerifiedDrawerOrder = async (params: {
+    orderNumber: string;
+    paymentMethod: string;
+    paymentStatus: "pending" | "paid";
+    orderStatus: "Pending" | "Confirmed";
+    paymentId?: string;
+    payStatusLabel: string;
+  }) => {
+    const isCod = params.paymentMethod === "cod";
+    const computedShipping = isCod ? shippingCost + COD_EXTRA_CHARGE : 0;
+    const computedTotal = Math.max(0, subtotal - discountAmount + computedShipping);
+    const balanceDue = isCod ? Math.max(0, computedTotal - COD_ADVANCE_COLLECTION) : 0;
+
+    await createOrder({
+      orderNumber: params.orderNumber,
+      customerName: formData.fullName,
+      customerPhone: formData.phone,
+      shippingAddress: formData.address,
+      city: formData.city,
+      state: formData.state,
+      pincode: formData.pincode,
+      paymentMethod: params.paymentMethod,
+      paymentStatus: params.paymentStatus,
+      orderStatus: params.orderStatus,
+      notes: isCod
+        ? `COD Order (Note: ₹${COD_EXTRA_CHARGE} COD Charges Applied) | ₹${COD_ADVANCE_COLLECTION} Advance Collected via YouPI-PG (Ref: ${params.paymentId || "N/A"}) | Balance Payable on Delivery: ₹${fmt(balanceDue)}`
+        : params.paymentId
+        ? `Prepaid Free Shipping | YouPI-PG Direct UPI Verified (VPA: pinelabs.stq4525474@pineaxis) | Ref: ${params.paymentId}`
+        : undefined,
+      subtotal: subtotal,
+      discountAmount: discountAmount,
+      promoCode: appliedPromo?.code || undefined,
+      shippingCost: computedShipping,
+      shippingMethod: isCod ? "cod_advance_300" : "prepaid_free_ship",
+      taxAmount: taxAmount,
+      totalAmount: computedTotal,
+      items: items.map((it) => ({
+        productId: it.id,
+        productName: it.name,
+        brand: it.brand || "Luxury",
+        price: it.price,
+        quantity: it.quantity,
+        imageUrl: it.imageUrl,
+      })),
+    });
+
+    const msg = generateWhatsAppMessage(
+      params.orderNumber,
+      params.payStatusLabel,
+      params.paymentId
+    );
+    setConfirmedTotal(computedTotal);
+    setConfirmedWhatsAppMsg(msg);
+    setOrderId(params.orderNumber);
+    setPaymentId(params.paymentId || "");
+    setIsProcessingPayment(false);
+    setStep("success");
+    clearCart();
+
     window.open(getWhatsAppChatUrl(msg), "_blank");
   };
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPaymentError(null);
     if (!validateForm()) return;
 
-    const newId = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const newId = orderId || `DF-${Math.floor(100000 + Math.random() * 900000)}`;
     setOrderId(newId);
+    setIsProcessingPayment(true);
+
+    const isCod = formData.paymentMethod === "cod";
+    const chargeNow = isCod ? COD_ADVANCE_COLLECTION : effectiveFinalTotal;
 
     try {
-      await createOrder({
-        orderNumber: newId,
-        customerName: formData.fullName,
-        customerPhone: formData.phone,
-        shippingAddress: formData.address,
-        city: formData.city,
-        state: formData.state,
-        pincode: formData.pincode,
-        paymentMethod: formData.paymentMethod,
-        subtotal: subtotal,
-        discountAmount: discountAmount,
-        promoCode: appliedPromo?.code || undefined,
-        shippingCost: shippingCost,
-        shippingMethod: shippingMethod,
-        taxAmount: taxAmount,
-        totalAmount: finalTotal,
-        items: items.map((it) => ({
-          productId: it.id,
-          productName: it.name,
-          brand: it.brand || "Luxury",
-          price: it.price,
-          quantity: it.quantity,
-          imageUrl: it.imageUrl,
-        })),
+      // Both Prepaid (full amount, free shipping) and COD (₹300 advance collection) verify payment first via YouPI-PG
+      const apiRes = await fetch("/api/youpi/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: newId,
+          amount: chargeNow,
+          customerName: formData.fullName,
+          customerPhone: formData.phone,
+          paymentType: isCod ? "cod_advance" : "prepaid",
+        }),
       });
-    } catch (err) {
-      console.error("Order save err:", err);
+
+      const orderData = await apiRes.json();
+
+      if (!orderData.success) {
+        throw new Error(orderData.error || "Failed to initiate YouPI-PG online payment gateway.");
+      }
+
+      const portalUrl = orderData.portalUrl || "http://localhost:7000";
+      const scriptLoaded = !orderData.isFallbackModal ? await loadYoupiSDK(portalUrl) : false;
+
+      if (scriptLoaded && window.Youpi && orderData.checkoutUrl) {
+        let settled = false;
+        await window.Youpi.pay({
+          orderId: newId,
+          paymentId: orderData.paymentId,
+          checkoutUrl: orderData.checkoutUrl,
+          portalUrl,
+          amount: chargeNow,
+          currency: "INR",
+          name: "DAPPERSFIT",
+          description: isCod
+            ? `COD ₹${COD_ADVANCE_COLLECTION} Advance Collection (#${newId})`
+            : `Prepaid Order #${newId} (Free Shipping)`,
+          handler: async (result) => {
+            if (settled) return;
+            const status = String(result?.status || "").toUpperCase();
+            if (
+              status === "SUCCESS" ||
+              status === "OBSERVED_SUCCESS" ||
+              status === "RECONCILED" ||
+              status === "MANUAL_REVIEW"
+            ) {
+              settled = true;
+              const verifyRes = await fetch("/api/youpi/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  paymentId: orderData.paymentId,
+                  orderId: newId,
+                  orderNumber: newId,
+                  utr: result?.utr,
+                  isDirectConfirmed: true,
+                }),
+              });
+              const verifyData = await verifyRes.json();
+              if (verifyData.success && verifyData.isPaid) {
+                const refId = verifyData.utr || verifyData.paymentId || orderData.paymentId;
+                await finalizeVerifiedDrawerOrder({
+                  orderNumber: newId,
+                  paymentMethod: isCod ? "cod" : "youpi",
+                  paymentStatus: "paid",
+                  orderStatus: "Confirmed",
+                  paymentId: refId,
+                  payStatusLabel: isCod
+                    ? `COD CONFIRMED (₹${COD_ADVANCE_COLLECTION} Advance Paid via YouPI-PG • ₹${fmt(balanceOnDeliveryAmount)} Payable on Delivery)`
+                    : "PREPAID PAID VIA YOUPI-PG (FREE SHIPPING)",
+                });
+              } else {
+                setPaymentError(
+                  verifyData.error || "Payment could not be verified. Please try again."
+                );
+                setIsProcessingPayment(false);
+              }
+            }
+          },
+          onCancelled: () => {
+            if (settled) return;
+            settled = true;
+            setPaymentError(
+              "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
+            );
+            setIsProcessingPayment(false);
+          },
+          onFailed: (result) => {
+            if (settled) return;
+            settled = true;
+            setPaymentError(
+              result?.reason ||
+                "Payment verification failed. Your cart items are safe — please retry."
+            );
+            setIsProcessingPayment(false);
+          },
+          onExpired: () => {
+            if (settled) return;
+            settled = true;
+            setPaymentError(
+              "Payment session expired. Your cart items are safe — please retry."
+            );
+            setIsProcessingPayment(false);
+          },
+          onClose: async () => {
+            if (settled) return;
+            try {
+              const verifyRes = await fetch("/api/youpi/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  paymentId: orderData.paymentId,
+                  orderId: newId,
+                  orderNumber: newId,
+                }),
+              });
+              const verifyData = await verifyRes.json();
+              if (verifyData.success && verifyData.isPaid) {
+                settled = true;
+                const refId = verifyData.utr || verifyData.paymentId || orderData.paymentId;
+                await finalizeVerifiedDrawerOrder({
+                  orderNumber: newId,
+                  paymentMethod: isCod ? "cod" : "youpi",
+                  paymentStatus: "paid",
+                  orderStatus: "Confirmed",
+                  paymentId: refId,
+                  payStatusLabel: isCod
+                    ? `COD CONFIRMED (₹${COD_ADVANCE_COLLECTION} Advance Paid via YouPI-PG • ₹${fmt(balanceOnDeliveryAmount)} Payable on Delivery)`
+                    : "PREPAID PAID VIA YOUPI-PG (FREE SHIPPING)",
+                });
+                return;
+              }
+            } catch {
+              // Ignore
+            }
+            settled = true;
+            setPaymentError(
+              "Payment modal closed before completion. Your cart items are safe — please retry payment."
+            );
+            setIsProcessingPayment(false);
+          },
+        });
+        return;
+      }
+
+      // Open built-in YouPI-PG Direct VPA QR Modal
+      setIsProcessingPayment(false);
+      setUtrInput("");
+      setSandboxOrderData({
+        orderId: orderData.paymentId || newId,
+        orderNumber: newId,
+        amount: chargeNow,
+        payeeVpa: orderData.payeeVpa || "pinelabs.stq4525474@pineaxis",
+        payeeName: orderData.payeeName || "DAPPERSFIT",
+        upiUri: orderData.upiUri,
+        checkoutUrl: orderData.checkoutUrl,
+      });
+      setShowSandboxModal(true);
+    } catch (err: unknown) {
+      console.error("Order processing error:", err);
+      setPaymentError(
+        err instanceof Error ? err.message : "An error occurred while initiating payment."
+      );
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handleSimulateSandboxPayment = async (customUtr?: string) => {
+    if (!sandboxOrderData) return;
+    const finalUtr = (customUtr || utrInput || `UTR${Date.now().toString().slice(-9)}`).trim();
+    if (finalUtr.length < 6) {
+      setPaymentError("Please enter a valid 12-digit UPI UTR / Reference number.");
+      return;
     }
 
-    const msg = generateWhatsAppMessage(newId);
-    window.open(getWhatsAppChatUrl(msg), "_blank");
+    setIsProcessingPayment(true);
+    const isCod = formData.paymentMethod === "cod";
 
-    setStep("success");
-    clearCart();
+    try {
+      const verifyRes = await fetch("/api/youpi/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentId: sandboxOrderData.orderId,
+          orderId: sandboxOrderData.orderNumber,
+          orderNumber: sandboxOrderData.orderNumber,
+          utr: finalUtr,
+          isDirectConfirmed: true,
+        }),
+      });
+
+      const verifyData = await verifyRes.json();
+
+      if (verifyData.success && verifyData.isPaid) {
+        const pId = verifyData.utr || verifyData.paymentId || finalUtr;
+        setShowSandboxModal(false);
+        await finalizeVerifiedDrawerOrder({
+          orderNumber: sandboxOrderData.orderNumber,
+          paymentMethod: isCod ? "cod" : "youpi",
+          paymentStatus: "paid",
+          orderStatus: "Confirmed",
+          paymentId: pId,
+          payStatusLabel: isCod
+            ? `COD CONFIRMED (₹${COD_ADVANCE_COLLECTION} Advance Paid via YouPI-PG • UTR: ${pId} • ₹${fmt(balanceOnDeliveryAmount)} Payable on Delivery)`
+            : `PREPAID PAID VIA YOUPI-PG (UTR: ${pId} • FREE SHIPPING)`,
+        });
+      } else {
+        setPaymentError(verifyData.error || "Payment verification failed.");
+        setIsProcessingPayment(false);
+      }
+    } catch (err) {
+      console.error("YouPI verify error:", err);
+      setPaymentError("Error completing payment.");
+      setIsProcessingPayment(false);
+    }
   };
 
   return (
@@ -348,9 +635,16 @@ export default function CartDrawer() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-start justify-between gap-2">
                                 <div>
-                                  <span className="inline-block text-[10px] font-bold tracking-wider text-[#D4AF37] uppercase">
-                                    {item.brand || "Luxury"}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="inline-block text-[10px] font-bold tracking-wider text-[#D4AF37] uppercase">
+                                      {item.brand || "Luxury"}
+                                    </span>
+                                    {isAutomaticWatch(item) && (
+                                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-brand font-black uppercase tracking-wider bg-gradient-to-r from-[#D4AF37] via-amber-300 to-[#D4AF37] text-black">
+                                        ⚙️ AUTOMATIC
+                                      </span>
+                                    )}
+                                  </div>
                                   <h4 className="text-sm font-semibold text-white truncate max-w-[180px] sm:max-w-[220px]">
                                     {item.name}
                                   </h4>
@@ -531,14 +825,15 @@ export default function CartDrawer() {
                         )}
 
                         <div className="flex justify-between text-gray-300">
-                          <span>Estimated Shipping</span>
+                          <span>Shipping</span>
                           <span>
-                            {shippingCost === 0 ? (
-                              <span className="text-emerald-400 font-medium">FREE</span>
-                            ) : (
-                              <span className="text-white font-medium">₹{shippingCost}</span>
-                            )}
+                            <span className="text-emerald-400 font-bold">FREE (Prepaid Free Ship)</span>
                           </span>
+                        </div>
+
+                        <div className="flex justify-between text-amber-400 text-xs bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 rounded-lg">
+                          <span>COD Option Note:</span>
+                          <span className="font-bold">₹300 Advance • +₹300 COD Charges</span>
                         </div>
 
                         <div className="flex justify-between text-gray-400 text-xs">
@@ -584,6 +879,12 @@ export default function CartDrawer() {
                         {totalCount} item{totalCount > 1 ? "s" : ""}
                       </span>
                     </div>
+
+                    {paymentError && (
+                      <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-3 text-red-300 text-xs">
+                        ⚠ {paymentError}
+                      </div>
+                    )}
 
                     <div className="space-y-4">
                       <h3 className="text-xs uppercase font-bold tracking-widest text-[#D4AF37]">
@@ -690,6 +991,60 @@ export default function CartDrawer() {
                       <div className="space-y-2">
                         <label
                           className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
+                            formData.paymentMethod === "upi"
+                              ? "bg-emerald-500/15 border-emerald-400 text-white"
+                              : "bg-neutral-900 border-white/10 text-gray-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              value="upi"
+                              checked={formData.paymentMethod === "upi"}
+                              onChange={() => setFormData({ ...formData, paymentMethod: "upi" })}
+                              className="text-emerald-400 focus:ring-0"
+                            />
+                            <div>
+                              <p className="text-xs font-bold flex items-center gap-1.5">
+                                <span>Prepaid UPI (GPay / PhonePe / Paytm)</span>
+                              </p>
+                              <p className="text-[10px] text-emerald-300">FREE Shipping • ₹0 COD Charges</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold uppercase">
+                            FREE SHIP
+                          </span>
+                        </label>
+
+                        <label
+                          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
+                            formData.paymentMethod === "card"
+                              ? "bg-emerald-500/15 border-emerald-400 text-white"
+                              : "bg-neutral-900 border-white/10 text-gray-300"
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              value="card"
+                              checked={formData.paymentMethod === "card"}
+                              onChange={() => setFormData({ ...formData, paymentMethod: "card" })}
+                              className="text-emerald-400 focus:ring-0"
+                            />
+                            <div>
+                              <p className="text-xs font-bold">Prepaid Card / Netbanking</p>
+                              <p className="text-[10px] text-emerald-300">FREE Shipping • Secure 256-bit SSL</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-bold uppercase">
+                            FREE SHIP
+                          </span>
+                        </label>
+
+                        <label
+                          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
                             formData.paymentMethod === "cod"
                               ? "bg-[#D4AF37]/15 border-[#D4AF37] text-white"
                               : "bg-neutral-900 border-white/10 text-gray-300"
@@ -706,71 +1061,55 @@ export default function CartDrawer() {
                             />
                             <div>
                               <p className="text-xs font-bold">Cash on Delivery (COD)</p>
-                              <p className="text-[10px] text-gray-400">Pay cash upon doorstep delivery</p>
+                              <p className="text-[10px] text-amber-300 font-medium">
+                                ₹300 Advance Collection • Note: ₹300 COD Charges
+                              </p>
                             </div>
                           </div>
-                          <span className="text-xs text-emerald-400 font-semibold">Verified</span>
-                        </label>
-
-                        <label
-                          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                            formData.paymentMethod === "upi"
-                              ? "bg-[#D4AF37]/15 border-[#D4AF37] text-white"
-                              : "bg-neutral-900 border-white/10 text-gray-300"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="radio"
-                              name="paymentMethod"
-                              value="upi"
-                              checked={formData.paymentMethod === "upi"}
-                              onChange={() => setFormData({ ...formData, paymentMethod: "upi" })}
-                              className="text-[#D4AF37] focus:ring-0"
-                            />
-                            <div>
-                              <p className="text-xs font-bold">UPI / GPay / PhonePe / Paytm</p>
-                              <p className="text-[10px] text-gray-400">Instant QR code on confirmation</p>
-                            </div>
-                          </div>
-                          <span className="text-xs text-[#D4AF37] font-semibold">Fastest</span>
-                        </label>
-
-                        <label
-                          className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition ${
-                            formData.paymentMethod === "card"
-                              ? "bg-[#D4AF37]/15 border-[#D4AF37] text-white"
-                              : "bg-neutral-900 border-white/10 text-gray-300"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="radio"
-                              name="paymentMethod"
-                              value="card"
-                              checked={formData.paymentMethod === "card"}
-                              onChange={() => setFormData({ ...formData, paymentMethod: "card" })}
-                              className="text-[#D4AF37] focus:ring-0"
-                            />
-                            <div>
-                              <p className="text-xs font-bold">Debit / Credit Card / Netbanking</p>
-                              <p className="text-[10px] text-gray-400">Secure SSL 256-bit payment</p>
-                            </div>
-                          </div>
-                          <span className="text-xs text-gray-400">Encrypted</span>
+                          <span className="text-[10px] bg-amber-500/20 text-[#D4AF37] border border-[#D4AF37]/50 px-2 py-0.5 rounded font-bold uppercase">
+                            +₹300 COD
+                          </span>
                         </label>
                       </div>
+
+                      {isCodSelected ? (
+                        <div className="p-3 rounded-xl bg-amber-500/10 border border-[#D4AF37]/50 text-[11px] text-gray-200 space-y-1">
+                          <div className="flex items-center justify-between font-bold text-[#D4AF37]">
+                            <span>📌 COD ₹300 Advance Collection</span>
+                            <span>Note: +₹300 COD Charges</span>
+                          </div>
+                          <p className="text-gray-300 leading-snug">
+                            Pay <strong>₹{COD_ADVANCE_COLLECTION} advance</strong> now to book COD. Remaining balance of <strong>₹{fmt(balanceOnDeliveryAmount)}</strong> is payable in cash at delivery (Total with ₹300 COD charge: ₹{fmt(effectiveFinalTotal)}).
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 font-semibold flex items-center justify-between">
+                          <span>🎉 Prepaid Free Shipping Applied!</span>
+                          <span>Save ₹300</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Submit button */}
                     <button
                       type="submit"
-                      className="w-full py-4 bg-[#D4AF37] hover:bg-[#b8952f] text-black font-extrabold text-sm uppercase tracking-wider rounded-xl transition shadow-xl shadow-[#D4AF37]/20 flex items-center justify-center gap-2 cursor-pointer"
+                      disabled={isProcessingPayment}
+                      className="w-full py-4 bg-[#D4AF37] hover:bg-[#b8952f] text-black font-extrabold text-sm uppercase tracking-wider rounded-xl transition shadow-xl shadow-[#D4AF37]/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span>Confirm Order (₹{fmt(finalTotal)})</span>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                      </svg>
+                      {isProcessingPayment ? (
+                        <span>Processing Payment...</span>
+                      ) : formData.paymentMethod === "cod" ? (
+                        <>
+                          <span>🔒 Pay ₹{COD_ADVANCE_COLLECTION} COD Advance (Balance ₹{fmt(balanceOnDeliveryAmount)} on Delivery)</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🔒 Pay ₹{fmt(effectiveFinalTotal)} Online (Free Ship)</span>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                          </svg>
+                        </>
+                      )}
                     </button>
                   </form>
                 )}
@@ -810,9 +1149,35 @@ export default function CartDrawer() {
                           {formData.address}, {formData.city} - {formData.pincode}
                         </span>
                       </div>
+                      {paymentId && (
+                        <div className="flex justify-between text-gray-400">
+                          <span>Payment Ref:</span>
+                          <span className="text-emerald-400 font-mono font-semibold">{paymentId}</span>
+                        </div>
+                      )}
+                      {formData.paymentMethod === "cod" && (
+                        <>
+                          <div className="flex justify-between text-gray-400">
+                            <span>COD Advance Paid:</span>
+                            <span className="text-emerald-400 font-bold">₹{COD_ADVANCE_COLLECTION}</span>
+                          </div>
+                          <div className="flex justify-between text-gray-400">
+                            <span>Balance on Delivery:</span>
+                            <span className="text-amber-400 font-bold">
+                              ₹{fmt(Math.max(0, (confirmedTotal || effectiveFinalTotal) - COD_ADVANCE_COLLECTION))}
+                            </span>
+                          </div>
+                        </>
+                      )}
                       <div className="border-t border-white/10 pt-2 flex justify-between font-bold">
-                        <span className="text-white">Amount Paid / COD:</span>
-                        <span className="text-[#D4AF37] text-sm">₹{fmt(finalTotal)}</span>
+                        <span className="text-white">
+                          {formData.paymentMethod === "cod"
+                            ? "Total Order Value (incl. ₹300 COD):"
+                            : "Total Prepaid (Free Ship):"}
+                        </span>
+                        <span className="text-[#D4AF37] text-sm">
+                          ₹{fmt(confirmedTotal || effectiveFinalTotal)}
+                        </span>
                       </div>
                     </div>
 
@@ -820,7 +1185,13 @@ export default function CartDrawer() {
                       <button
                         type="button"
                         onClick={() => {
-                          const msg = generateWhatsAppMessage(orderId);
+                          const msg =
+                            confirmedWhatsAppMsg ||
+                            generateWhatsAppMessage(
+                              orderId,
+                              paymentId ? "PAID ONLINE" : "Cash on Delivery",
+                              paymentId || undefined
+                            );
                           window.open(getWhatsAppChatUrl(msg), "_blank");
                         }}
                         className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
@@ -849,7 +1220,10 @@ export default function CartDrawer() {
                   {/* Primary "Proceed to Checkout" Button */}
                   <button
                     type="button"
-                    onClick={() => setStep("checkout")}
+                    onClick={() => {
+                      setPaymentError(null);
+                      setStep("checkout");
+                    }}
                     className="w-full py-4 bg-[#D4AF37] hover:bg-[#b8952f] text-black font-extrabold text-sm uppercase tracking-wider rounded-xl transition shadow-xl shadow-[#D4AF37]/25 flex items-center justify-center gap-2 transform hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                   >
                     <span>Proceed to Checkout</span>
@@ -870,7 +1244,7 @@ export default function CartDrawer() {
                     <svg className="w-4 h-4 fill-current text-emerald-400" viewBox="0 0 24 24">
                       <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z" />
                     </svg>
-                    <span>Or Order via WhatsApp Directly</span>
+                    <span>Or Enquire via WhatsApp Directly</span>
                   </button>
 
                   <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1">
@@ -881,6 +1255,119 @@ export default function CartDrawer() {
               )}
             </div>
           </div>
+
+          {/* YouPI-PG Direct VPA QR Checkout Modal inside CartDrawer */}
+          {showSandboxModal && sandboxOrderData && (
+            <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-neutral-950 border border-[#D4AF37]/60 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+                <div className="flex items-start justify-between border-b border-white/10 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#D4AF37] font-bold">
+                        YouPI-PG Direct UPI Gateway
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold font-serif text-white">
+                      Scan & Pay via UPI
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSandboxModal(false);
+                      setIsProcessingPayment(false);
+                      setPaymentError(
+                        "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
+                      );
+                    }}
+                    className="text-gray-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 text-center space-y-3 text-gray-900">
+                  <div className="text-xs font-bold uppercase tracking-wider text-gray-700">
+                    Payee: <span className="text-black">{sandboxOrderData.payeeName || "DAPPERSFIT"}</span>
+                  </div>
+                  {sandboxOrderData.upiUri && (
+                    <div className="w-44 h-44 mx-auto bg-white p-2 rounded-xl border border-gray-200 flex items-center justify-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                          sandboxOrderData.upiUri
+                        )}`}
+                        alt="DAPPERSFIT UPI QR Code"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  )}
+                  <div className="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-lg text-gray-800 break-all">
+                    VPA: <strong>{sandboxOrderData.payeeVpa || "pinelabs.stq4525474@pineaxis"}</strong>
+                  </div>
+                  {sandboxOrderData.upiUri && (
+                    <a
+                      href={sandboxOrderData.upiUri}
+                      className="inline-block w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition"
+                    >
+                      Open UPI App (GPay / PhonePe / Paytm)
+                    </a>
+                  )}
+                </div>
+
+                <div className="bg-neutral-900 rounded-2xl p-4 border border-white/5 space-y-2 text-xs font-mono">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Order Ref:</span>
+                    <span className="text-white font-bold">#{sandboxOrderData.orderNumber}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-white/5 text-sm">
+                    <span className="text-gray-300">Amount Payable Now:</span>
+                    <span className="text-[#D4AF37] font-bold">
+                      ₹{fmt(sandboxOrderData.amount)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] text-gray-300 font-semibold mb-1">
+                      Enter 12-Digit UPI UTR / Reference No. after paying:
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 432187654321"
+                      value={utrInput}
+                      onChange={(e) => setUtrInput(e.target.value)}
+                      className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#D4AF37]"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSimulateSandboxPayment(utrInput)}
+                    disabled={isProcessingPayment}
+                    className="w-full py-3.5 bg-gradient-to-r from-[#D4AF37] to-amber-500 hover:from-[#b8952f] hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span>✓ Verify UPI Payment & Confirm Order</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSandboxModal(false);
+                      setIsProcessingPayment(false);
+                      setPaymentError(
+                        "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
+                      );
+                    }}
+                    className="w-full py-2 text-xs text-gray-400 hover:text-white transition cursor-pointer"
+                  >
+                    Cancel / Go Back (Do Not Complete Payment)
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

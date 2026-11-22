@@ -167,8 +167,12 @@ export default function RequestWatch() {
         </div>
 
         <div className="flex justify-end">
-          <button type="submit" className="inline-flex justify-center py-3 px-8 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black">
-            Request This Watch
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex justify-center py-3 px-8 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-black hover:bg-gray-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black"
+          >
+            {isSubmitting ? "Submitting..." : "Request This Watch"}
           </button>
         </div>
       </form>

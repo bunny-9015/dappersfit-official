@@ -5,8 +5,8 @@ import { useCart } from "@/context/CartContext";
 import WatchInspectionModal from "./WatchInspectionModal";
 import PriceTag from "./PriceTag";
 import BrandExploreSection from "./BrandExploreSection";
-import { deriveBrandCategories, formatBrandDisplayName } from "@/lib/brandUtils";
-import { openWhatsAppEnquiry, getWhatsAppChatUrl, formatWatchEnquiryMessage } from "@/lib/whatsapp";
+import { deriveBrandCategories, formatBrandDisplayName, isAutomaticWatch } from "@/lib/brandUtils";
+import { getWhatsAppChatUrl, formatWatchEnquiryMessage } from "@/lib/whatsapp";
 
 export interface ProductData {
   id: string;
@@ -28,13 +28,12 @@ export interface CategoryData {
 
 interface CatalogSectionProps {
   products: ProductData[];
-  categories: CategoryData[];
+  categories?: CategoryData[];
   initialBrand?: string;
 }
 
 export default function CatalogSection({
   products,
-  categories,
   initialBrand = "",
 }: CatalogSectionProps) {
   const { addToCart, setIsOpen } = useCart();
@@ -284,7 +283,9 @@ export default function CatalogSection({
                 <span className="text-xs text-gray-500 uppercase tracking-wider hidden sm:inline">Sort:</span>
                 <select
                   value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
+                  onChange={(e) =>
+                    setSortBy(e.target.value as "featured" | "price-asc" | "price-desc")
+                  }
                   className="bg-gray-50 border border-gray-200 rounded-full px-4 py-2 text-xs font-medium text-gray-700 focus:outline-none focus:border-[#172B55] cursor-pointer shadow-xs"
                 >
                   <option value="featured">Featured / Default</option>
@@ -333,11 +334,16 @@ export default function CatalogSection({
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {visibleProducts.map((product) => {
                 const isAdded = !!addedIds[product.id];
+                const isAutomatic = isAutomaticWatch(product);
                 return (
                   <div
                     key={product.id}
                     onClick={() => setQuickViewProduct(product)}
-                    className="group relative bg-white rounded-2xl border border-gray-200 hover:border-gray-400 hover:shadow-xl overflow-hidden flex flex-col transition-[transform,border-color,box-shadow] duration-200 ease-out cursor-pointer transform hover:-translate-y-1 transform-gpu will-change-transform product-card-perf shadow-xs"
+                    className={`group relative bg-white rounded-2xl border overflow-hidden flex flex-col transition-[transform,border-color,box-shadow] duration-200 ease-out cursor-pointer transform hover:-translate-y-1 transform-gpu will-change-transform product-card-perf ${
+                      isAutomatic
+                        ? "border-[#D4AF37] ring-2 ring-[#D4AF37]/50 shadow-lg hover:shadow-2xl"
+                        : "border-gray-200 hover:border-gray-400 hover:shadow-xl shadow-xs"
+                    }`}
                   >
                     {/* Image Container: Clean light background so watch photos blend seamlessly */}
                     <div className="relative aspect-square w-full bg-gray-50 p-6 flex items-center justify-center overflow-hidden border-b border-gray-100">
@@ -355,6 +361,16 @@ export default function CatalogSection({
                       ) : (
                         <div className="text-gray-400 text-xs text-center">
                           <span>Luxury Timepiece</span>
+                        </div>
+                      )}
+
+                      {/* Highlighted AUTOMATIC Tag Badge */}
+                      {isAutomatic && (
+                        <div className="absolute top-3 left-3 z-10">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-brand font-black uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] via-amber-300 to-[#D4AF37] text-black border-2 border-black/80 shadow-lg shadow-[#D4AF37]/40 animate-pulse">
+                            <span>⚙️</span>
+                            <span>AUTOMATIC</span>
+                          </span>
                         </div>
                       )}
 
@@ -385,9 +401,16 @@ export default function CatalogSection({
                     {/* Product Details */}
                     <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
                       <div>
-                        <span className="text-[11px] font-brand font-extrabold uppercase tracking-widest text-[#996515] sm:text-[#b8860b]">
-                          {product.brand}
-                        </span>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-brand font-extrabold uppercase tracking-widest text-[#996515] sm:text-[#b8860b]">
+                            {product.brand}
+                          </span>
+                          {isAutomatic && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-brand font-black uppercase tracking-wider bg-black text-[#D4AF37] border border-[#D4AF37]">
+                              AUTOMATIC
+                            </span>
+                          )}
+                        </div>
                         <h3 className="text-base font-sans font-bold text-gray-900 group-hover:text-black line-clamp-1 mt-0.5">
                           {product.name}
                         </h3>
@@ -400,8 +423,8 @@ export default function CatalogSection({
                       <div className="pt-3 border-t border-gray-100 space-y-3">
                         <div className="flex items-baseline justify-between gap-2">
                           <PriceTag price={product.price} theme="light" size="md" showOriginal={true} showBadge={true} />
-                          <span className="text-[10px] font-sans text-gray-500 uppercase tracking-wider shrink-0 font-medium">
-                            Free Delivery
+                          <span className="text-[10px] font-sans text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 font-bold">
+                            Prepaid Free Ship
                           </span>
                         </div>
 

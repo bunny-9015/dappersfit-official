@@ -1,6 +1,5 @@
 import { connection } from "next/server";
 import prisma from "@/lib/prisma";
-import Link from "next/link";
 import { addProduct } from "@/app/actions";
 import AdminNav from "@/components/admin/AdminNav";
 

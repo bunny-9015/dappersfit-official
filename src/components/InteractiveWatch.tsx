@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Environment, ContactShadows, Float, useGLTF } from "@react-three/drei";
+import { OrbitControls, Environment, ContactShadows, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 function RealisticWatch() {

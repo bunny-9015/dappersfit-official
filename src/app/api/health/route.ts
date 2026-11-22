@@ -10,8 +10,8 @@ export async function GET() {
     const dbStart = Date.now();
     await prisma.product.count();
     dbLatency = Date.now() - dbStart;
-  } catch (e: any) {
-    dbStatus = "error: " + (e?.message || "DB unreachable");
+  } catch (e: unknown) {
+    dbStatus = "error: " + (e instanceof Error ? e.message : "DB unreachable");
   }
 
   const memory = process.memoryUsage();

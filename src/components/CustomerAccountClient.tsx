@@ -324,6 +324,8 @@ export default function CustomerAccountClient({ user, orders }: Props) {
                         <strong>Payment:</strong>{" "}
                         {order.paymentMethod === "cod"
                           ? "Cash On Delivery"
+                          : order.paymentMethod === "cashfree"
+                          ? "Cashfree Online (UPI/Cards)"
                           : order.paymentMethod === "razorpay"
                           ? "Razorpay Online (UPI/Cards)"
                           : "Online UPI"}{" "}

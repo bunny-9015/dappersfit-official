@@ -39,8 +39,11 @@ export async function POST(req: NextRequest) {
           keyId: RAZORPAY_KEY_ID,
           isDemo: false,
         });
-      } catch (err: any) {
-        console.warn("Razorpay API order creation error, falling back to sandbox demo mode:", err?.message || err);
+      } catch (err: unknown) {
+        console.warn(
+          "Razorpay API order creation error, falling back to sandbox demo mode:",
+          err instanceof Error ? err.message : err
+        );
       }
     }
 
@@ -55,10 +58,13 @@ export async function POST(req: NextRequest) {
       keyId: RAZORPAY_KEY_ID,
       isDemo: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error creating payment order:", error);
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to create payment order." },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to create payment order.",
+      },
       { status: 500 }
     );
   }

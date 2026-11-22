@@ -99,7 +99,6 @@ function ReviewVideoCard({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [progress, setProgress] = useState<number>(0);
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   const isAudioActive = activeAudioId === review.id;
 
@@ -111,8 +110,7 @@ function ReviewVideoCard({
     if (isAudioActive) {
       video.muted = false;
       video.volume = 1.0;
-      video.play().catch(() => {});
-      setIsPlaying(true);
+      video.play().then(() => setIsPlaying(true)).catch(() => {});
     } else {
       video.muted = true;
     }
@@ -127,7 +125,6 @@ function ReviewVideoCard({
       video.play().then(() => setIsPlaying(true)).catch(() => {});
     } else {
       video.pause();
-      setIsPlaying(false);
     }
   }, [isVisible]);
 
@@ -203,7 +200,8 @@ function ReviewVideoCard({
           muted={!isAudioActive}
           playsInline
           preload="auto"
-          onLoadedData={() => setIsLoaded(true)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
           onTimeUpdate={handleTimeUpdate}
           onEnded={() => {
             const video = videoRef.current;

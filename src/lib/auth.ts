@@ -26,7 +26,7 @@ export function verifyPassword(password: string, storedHash: string): boolean {
     const keyBuffer = Buffer.from(key, "hex");
     const derivedKey = crypto.scryptSync(password, salt, 64);
     return crypto.timingSafeEqual(keyBuffer, derivedKey);
-  } catch (err) {
+  } catch {
     return false;
   }
 }
@@ -79,7 +79,7 @@ export function verifySessionToken(token: string): SessionUser | null {
       name: payload.name,
       role: payload.role as "CUSTOMER" | "ADMIN",
     };
-  } catch (err) {
+  } catch {
     return null;
   }
 }
