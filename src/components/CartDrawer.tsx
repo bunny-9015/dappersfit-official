@@ -5,6 +5,7 @@ import { useCart, COD_EXTRA_CHARGE, COD_ADVANCE_COLLECTION } from "@/context/Car
 import { createOrder } from "@/app/actions";
 import PriceTag from "./PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
+import YoupiCheckoutModal from "@/components/YoupiCheckoutModal";
 import { isAutomaticWatch } from "@/lib/brandUtils";
 
 const fmt = (val: number | string | undefined | null) => {
@@ -1256,118 +1257,22 @@ export default function CartDrawer() {
             </div>
           </div>
 
-          {/* YouPI-PG Direct VPA QR Checkout Modal inside CartDrawer */}
-          {showSandboxModal && sandboxOrderData && (
-            <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="bg-neutral-950 border border-[#D4AF37]/60 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
-                <div className="flex items-start justify-between border-b border-white/10 pb-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span className="text-[10px] font-mono uppercase tracking-widest text-[#D4AF37] font-bold">
-                        YouPI-PG Direct UPI Gateway
-                      </span>
-                    </div>
-                    <h3 className="text-xl font-bold font-serif text-white">
-                      Scan & Pay via UPI
-                    </h3>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSandboxModal(false);
-                      setIsProcessingPayment(false);
-                      setPaymentError(
-                        "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
-                      );
-                    }}
-                    className="text-gray-400 hover:text-white p-1 rounded-lg cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div className="bg-white rounded-2xl p-4 text-center space-y-3 text-gray-900">
-                  <div className="text-xs font-bold uppercase tracking-wider text-gray-700">
-                    Payee: <span className="text-black">{sandboxOrderData.payeeName || "DAPPERSFIT"}</span>
-                  </div>
-                  {sandboxOrderData.upiUri && (
-                    <div className="w-44 h-44 mx-auto bg-white p-2 rounded-xl border border-gray-200 flex items-center justify-center">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
-                          sandboxOrderData.upiUri
-                        )}`}
-                        alt="DAPPERSFIT UPI QR Code"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                  )}
-                  <div className="text-[11px] font-mono bg-gray-100 px-3 py-1.5 rounded-lg text-gray-800 break-all">
-                    VPA: <strong>{sandboxOrderData.payeeVpa || "pinelabs.stq4525474@pineaxis"}</strong>
-                  </div>
-                  {sandboxOrderData.upiUri && (
-                    <a
-                      href={sandboxOrderData.upiUri}
-                      className="inline-block w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition"
-                    >
-                      Open UPI App (GPay / PhonePe / Paytm)
-                    </a>
-                  )}
-                </div>
-
-                <div className="bg-neutral-900 rounded-2xl p-4 border border-white/5 space-y-2 text-xs font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Order Ref:</span>
-                    <span className="text-white font-bold">#{sandboxOrderData.orderNumber}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-white/5 text-sm">
-                    <span className="text-gray-300">Amount Payable Now:</span>
-                    <span className="text-[#D4AF37] font-bold">
-                      ₹{fmt(sandboxOrderData.amount)}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] text-gray-300 font-semibold mb-1">
-                      Enter 12-Digit UPI UTR / Reference No. after paying:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 432187654321"
-                      value={utrInput}
-                      onChange={(e) => setUtrInput(e.target.value)}
-                      className="w-full bg-neutral-900 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-[#D4AF37]"
-                    />
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSimulateSandboxPayment(utrInput)}
-                    disabled={isProcessingPayment}
-                    className="w-full py-3.5 bg-gradient-to-r from-[#D4AF37] to-amber-500 hover:from-[#b8952f] hover:to-amber-400 text-black font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                  >
-                    <span>✓ Verify UPI Payment & Confirm Order</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSandboxModal(false);
-                      setIsProcessingPayment(false);
-                      setPaymentError(
-                        "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
-                      );
-                    }}
-                    className="w-full py-2 text-xs text-gray-400 hover:text-white transition cursor-pointer"
-                  >
-                    Cancel / Go Back (Do Not Complete Payment)
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* YouPI-PG White-Label Checkout Modal inside CartDrawer */}
+          <YoupiCheckoutModal
+            isOpen={showSandboxModal}
+            orderData={sandboxOrderData}
+            customerName={formData.fullName}
+            customerPhone={formData.phone}
+            isProcessing={isProcessingPayment}
+            onVerifyUtr={(utr) => handleSimulateSandboxPayment(utr)}
+            onClose={() => {
+              setShowSandboxModal(false);
+              setIsProcessingPayment(false);
+              setPaymentError(
+                "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
+              );
+            }}
+          />
         </div>
       )}
     </>
