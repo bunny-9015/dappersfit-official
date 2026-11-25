@@ -3,11 +3,11 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function check() {
-  const timeZone = await prisma.$queryRaw<Array<Record<string, unknown>>>`SHOW TimeZone`;
+  const timeZone: any[] = await prisma.$queryRaw`SHOW TimeZone`;
   console.log('TimeZone:', timeZone);
 
   // Let's check inet_server_addr
-  const serverAddr = await prisma.$queryRaw<Array<Record<string, unknown>>>`SELECT inet_server_addr(), inet_server_port()`;
+  const serverAddr: any[] = await prisma.$queryRaw`SELECT inet_server_addr(), inet_server_port()`;
   console.log('Server Addr:', serverAddr);
 }
 

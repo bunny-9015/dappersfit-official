@@ -125,7 +125,7 @@ export async function createCashfreeOrder(
       currency: data.order_currency,
       isDemo: false,
     };
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error("Cashfree order creation error:", err);
     return {
       success: true,
@@ -141,31 +141,19 @@ export async function createCashfreeOrder(
 /**
  * Verifies the Cashfree order status from Cashfree server
  */
-export async function verifyCashfreeOrder(
-  orderId: string,
-  options?: { isSimulatedSuccess?: boolean; simulatedMode?: string }
-): Promise<{
+export async function verifyCashfreeOrder(orderId: string): Promise<{
   success: boolean;
   orderStatus: string;
   isPaid: boolean;
   paymentId?: string;
   error?: string;
 }> {
-  // Only allow demo auto-success when explicitly triggered by the Sandbox "Simulate Success" button
   if (isCashfreeDemoMode() || orderId.includes("demo")) {
-    if (options?.isSimulatedSuccess === true) {
-      return {
-        success: true,
-        orderStatus: "PAID",
-        isPaid: true,
-        paymentId: `cf_${options.simulatedMode || "pay"}_demo_${Date.now()}`,
-      };
-    }
     return {
-      success: false,
-      orderStatus: "CANCELLED",
-      isPaid: false,
-      error: "Payment was cancelled or not completed.",
+      success: true,
+      orderStatus: "PAID",
+      isPaid: true,
+      paymentId: `cf_pay_demo_${Date.now()}`,
     };
   }
 
@@ -177,7 +165,6 @@ export async function verifyCashfreeOrder(
         "x-client-secret": CASHFREE_SECRET_KEY,
         "x-api-version": CASHFREE_API_VERSION,
       },
-      cache: "no-store",
     });
 
     const data = await res.json();
@@ -193,21 +180,18 @@ export async function verifyCashfreeOrder(
 
     const isPaid = data.order_status === "PAID";
     return {
-      success: isPaid,
+      success: true,
       orderStatus: data.order_status,
       isPaid,
       paymentId: data.cf_order_id ? String(data.cf_order_id) : undefined,
-      error: isPaid
-        ? undefined
-        : "Payment was not completed. If you pressed back, your cart is saved and you can retry.",
     };
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error("Cashfree order verify error:", err);
     return {
       success: false,
       orderStatus: "ERROR",
       isPaid: false,
-      error: err instanceof Error ? err.message : "Error verifying Cashfree order",
+      error: err?.message || "Error verifying Cashfree order",
     };
   }
 }

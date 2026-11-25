@@ -55,13 +55,10 @@ export async function POST(req: NextRequest) {
       paymentId: razorpay_payment_id,
       orderId: razorpay_order_id,
     });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Error verifying payment signature:", error);
     return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Internal server error during verification.",
-      },
+      { success: false, error: error.message || "Internal server error during verification." },
       { status: 500 }
     );
   }

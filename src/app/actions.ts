@@ -12,8 +12,8 @@ import {
 } from "@/lib/auth";
 
 export async function submitWatchRequest(formData: FormData) {
-  const brand = formData.get("brand") as string;
-  const otherBrand = formData.get("otherBrand") as string;
+  const brand = formData.get("brand") as String;
+  const otherBrand = formData.get("otherBrand") as String;
   
   const finalBrand = brand === "Other" && otherBrand ? otherBrand : brand;
 
@@ -57,7 +57,7 @@ export async function addCategory(name: string) {
     revalidatePath("/catalog");
     revalidatePath("/admin/products");
     return { success: true };
-  } catch {
+  } catch (error) {
     return { success: false };
   }
 }
@@ -109,8 +109,6 @@ export async function createOrder(data: {
   pincode?: string;
   paymentMethod?: string;
   paymentStatus?: string;
-  orderStatus?: string;
-  notes?: string;
   subtotal: number;
   discountAmount?: number;
   promoCode?: string;
@@ -130,153 +128,50 @@ export async function createOrder(data: {
   try {
     const session = await getCurrentSession();
     const finalUserId = data.userId || session?.userId || null;
-    const isCod = !data.paymentMethod || data.paymentMethod === "cod";
-    const resolvedPaymentStatus =
-      data.paymentStatus || (isCod ? "pending" : "processing");
-    const resolvedOrderStatus =
-      data.orderStatus || (isCod ? "Pending" : "Payment Processing");
 
-    // Check if an order with this orderNumber already exists (e.g. customer retried after pressing back)
-    const existingOrder = await prisma.order.findUnique({
-      where: { orderNumber: data.orderNumber },
+    const order = await prisma.order.create({
+      data: {
+        orderNumber: data.orderNumber,
+        userId: finalUserId,
+        customerName: data.customerName,
+        customerPhone: data.customerPhone,
+        customerEmail: data.customerEmail || null,
+        shippingAddress: data.shippingAddress,
+        city: data.city || null,
+        state: data.state || null,
+        pincode: data.pincode || null,
+        paymentMethod: data.paymentMethod || "cod",
+        paymentStatus: data.paymentStatus || (data.paymentMethod === "cod" ? "pending" : "paid"),
+        orderStatus: "Pending",
+        subtotal: data.subtotal,
+        discountAmount: data.discountAmount || 0,
+        promoCode: data.promoCode || null,
+        shippingCost: data.shippingCost || 0,
+        shippingMethod: data.shippingMethod || "standard",
+        taxAmount: data.taxAmount || 0,
+        totalAmount: data.totalAmount,
+        items: {
+          create: data.items.map((item) => ({
+            productId: item.productId || null,
+            productName: item.productName,
+            brand: item.brand,
+            price: item.price,
+            quantity: item.quantity,
+            imageUrl: item.imageUrl || null,
+          })),
+        },
+      },
+      include: {
+        items: true,
+      },
     });
-
-    let order;
-    if (existingOrder) {
-      order = await prisma.order.update({
-        where: { orderNumber: data.orderNumber },
-        data: {
-          userId: finalUserId,
-          customerName: data.customerName,
-          customerPhone: data.customerPhone,
-          customerEmail: data.customerEmail || null,
-          shippingAddress: data.shippingAddress,
-          city: data.city || null,
-          state: data.state || null,
-          pincode: data.pincode || null,
-          paymentMethod: data.paymentMethod || "cod",
-          paymentStatus: resolvedPaymentStatus,
-          orderStatus: resolvedOrderStatus,
-          subtotal: data.subtotal,
-          discountAmount: data.discountAmount || 0,
-          promoCode: data.promoCode || null,
-          shippingCost: data.shippingCost || 0,
-          shippingMethod: data.shippingMethod || "standard",
-          taxAmount: data.taxAmount || 0,
-          totalAmount: data.totalAmount,
-          notes: data.notes !== undefined ? data.notes : existingOrder.notes,
-        },
-        include: {
-          items: true,
-        },
-      });
-    } else {
-      order = await prisma.order.create({
-        data: {
-          orderNumber: data.orderNumber,
-          userId: finalUserId,
-          customerName: data.customerName,
-          customerPhone: data.customerPhone,
-          customerEmail: data.customerEmail || null,
-          shippingAddress: data.shippingAddress,
-          city: data.city || null,
-          state: data.state || null,
-          pincode: data.pincode || null,
-          paymentMethod: data.paymentMethod || "cod",
-          paymentStatus: resolvedPaymentStatus,
-          orderStatus: resolvedOrderStatus,
-          subtotal: data.subtotal,
-          discountAmount: data.discountAmount || 0,
-          promoCode: data.promoCode || null,
-          shippingCost: data.shippingCost || 0,
-          shippingMethod: data.shippingMethod || "standard",
-          taxAmount: data.taxAmount || 0,
-          totalAmount: data.totalAmount,
-          notes: data.notes || null,
-          items: {
-            create: data.items.map((item) => ({
-              productId: item.productId || null,
-              productName: item.productName,
-              brand: item.brand,
-              price: item.price,
-              quantity: item.quantity,
-              imageUrl: item.imageUrl || null,
-            })),
-          },
-        },
-        include: {
-          items: true,
-        },
-      });
-    }
 
     revalidatePath("/admin/orders");
     revalidatePath("/account");
     return { success: true, order };
   } catch (error) {
-    console.warn("Database unavailable during createOrder, returning local order confirmation:", error);
-    const fallbackOrder = {
-      id: `local_${Date.now()}`,
-      orderNumber: data.orderNumber,
-      userId: data.userId || null,
-      customerName: data.customerName,
-      customerPhone: data.customerPhone,
-      customerEmail: data.customerEmail || null,
-      shippingAddress: data.shippingAddress,
-      city: data.city || null,
-      state: data.state || null,
-      pincode: data.pincode || null,
-      paymentMethod: data.paymentMethod || "cod",
-      paymentStatus: data.paymentStatus || "paid",
-      orderStatus: data.orderStatus || "Confirmed",
-      subtotal: data.subtotal,
-      discountAmount: data.discountAmount || 0,
-      promoCode: data.promoCode || null,
-      shippingCost: data.shippingCost || 0,
-      shippingMethod: data.shippingMethod || "standard",
-      taxAmount: data.taxAmount || 0,
-      totalAmount: data.totalAmount,
-      notes: data.notes || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      items: data.items.map((item, idx) => ({
-        id: `item_${Date.now()}_${idx}`,
-        orderId: `local_${Date.now()}`,
-        productId: item.productId || null,
-        productName: item.productName,
-        brand: item.brand,
-        price: item.price,
-        quantity: item.quantity,
-        imageUrl: item.imageUrl || null,
-      })),
-    };
-    return { success: true, order: fallbackOrder };
-  }
-}
-
-export async function markOrderPaymentAttempt(
-  orderNumber: string,
-  update: {
-    orderStatus: string;
-    paymentStatus: string;
-    notes?: string;
-  }
-) {
-  try {
-    await prisma.order.update({
-      where: { orderNumber },
-      data: {
-        orderStatus: update.orderStatus,
-        paymentStatus: update.paymentStatus,
-        ...(update.notes ? { notes: update.notes } : {}),
-      },
-    });
-    revalidatePath("/admin/orders");
-    revalidatePath("/account");
-    return { success: true };
-  } catch (error) {
-    console.error("Failed to update order payment attempt:", error);
-    return { success: false, error: "Failed to update order payment status" };
+    console.error("Failed to create order:", error);
+    return { success: false, error: "Failed to create order" };
   }
 }
 

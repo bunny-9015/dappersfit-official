@@ -1,73 +1,58 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyYoupiWebhookSignature, YOUPI_PAYEE_VPA, YOUPI_PAYEE_NAME } from "@/lib/youpi";
+import { verifyYoupiWebhook, YOUPI_WEBHOOK_SECRET } from "@/lib/youpi";
 import prisma from "@/lib/prisma";
-
-export async function GET() {
-  return NextResponse.json({
-    status: "active",
-    endpoint: "/api/youpi/webhook",
-    method: "POST (HMAC-SHA256 Signed Webhook)",
-    payeeName: YOUPI_PAYEE_NAME,
-    payeeVpa: YOUPI_PAYEE_VPA,
-  });
-}
 
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
     const signature =
-      req.headers.get("x-gateway-signature") ||
-      req.headers.get("x-gateway-signature-v2");
-    const timestamp = req.headers.get("x-gateway-timestamp");
+      req.headers.get("x-youpi-signature") ||
+      req.headers.get("x-signature") ||
+      req.headers.get("x-youpi-signature-v2");
 
-    if (!verifyYoupiWebhookSignature(rawBody, signature, timestamp)) {
+    const isValid = verifyYoupiWebhook(rawBody, signature, YOUPI_WEBHOOK_SECRET);
+    if (!isValid) {
+      console.warn("[YouPI Webhook] Invalid HMAC signature rejected.");
       return NextResponse.json(
-        { error: "Invalid webhook signature" },
+        { success: false, error: "Invalid HMAC signature." },
         { status: 401 }
       );
     }
 
-    const payload = JSON.parse(rawBody);
-    const event = String(payload.event || "").toUpperCase();
-    const orderId = String(payload.orderId || "").trim();
-    const utr = String(payload.utr || "").trim();
-    const paymentId = String(payload.paymentId || "").trim();
+    let payload: any = {};
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json(
+        { success: false, error: "Invalid JSON payload." },
+        { status: 400 }
+      );
+    }
 
-    if (
-      orderId &&
-      (event === "OBSERVED_SUCCESS" ||
-        event === "RECONCILED" ||
-        event === "SUCCESS")
-    ) {
+    const { event, orderId, utr, paymentId } = payload || {};
+    const ref = utr || paymentId || `youpi_auto_${Date.now()}`;
+
+    if (orderId && (event === "payment.succeeded" || event === "reconciled" || !event)) {
       try {
-        const existing = await prisma.order.findUnique({
+        await prisma.order.update({
           where: { orderNumber: orderId },
+          data: {
+            paymentStatus: "paid",
+            orderStatus: "Confirmed",
+            paymentMethod: "youpi_upi",
+            notes: `YouPI Auto-Reconciled Webhook | Ref: ${ref}`,
+          },
         });
-        if (existing) {
-          await prisma.order.update({
-            where: { orderNumber: orderId },
-            data: {
-              paymentStatus: "paid",
-              orderStatus: "Confirmed",
-              notes: `YouPI-PG Webhook (${event}) | Payment ID: ${paymentId}${
-                utr ? ` | UTR: ${utr}` : ""
-              }`,
-            },
-          });
-        }
       } catch (dbErr) {
-        console.warn("DB update skipped during YouPI webhook:", dbErr);
+        console.warn("[YouPI Webhook] DB order update skipped:", dbErr);
       }
     }
 
-    return NextResponse.json({ received: true, event, orderId });
-  } catch (error: unknown) {
-    console.error("YouPI webhook processing error:", error);
+    return NextResponse.json({ success: true, received: true });
+  } catch (err: any) {
+    console.error("[YouPI Webhook Error]:", err);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Webhook processing failed",
-      },
+      { success: false, error: "Internal processing error" },
       { status: 500 }
     );
   }

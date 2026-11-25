@@ -5,7 +5,7 @@ import prisma from "@/lib/prisma";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, orderNumber, isSimulatedSuccess, simulatedMode } = body;
+    const { orderId, orderNumber } = body;
 
     const lookupId = orderId || orderNumber;
 
@@ -16,57 +16,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const verification = await verifyCashfreeOrder(lookupId, {
-      isSimulatedSuccess: Boolean(isSimulatedSuccess),
-      simulatedMode,
-    });
+    const verification = await verifyCashfreeOrder(lookupId);
 
     if (!verification.success || !verification.isPaid) {
       return NextResponse.json(
         {
           success: false,
-          isPaid: false,
-          error:
-            verification.error ||
-            "Payment was cancelled or not completed. Please try again.",
+          error: verification.error || "Payment verification failed. Order is not paid.",
           orderStatus: verification.orderStatus,
         },
         { status: 400 }
       );
     }
 
-    // Update database order status if the order already exists in DB
+    // Update database order status
     const targetOrderNumber = orderNumber || orderId;
     try {
-      const existing = await prisma.order.findUnique({
+      await prisma.order.update({
         where: { orderNumber: targetOrderNumber },
+        data: {
+          paymentStatus: "paid",
+          orderStatus: "Confirmed",
+          paymentMethod: "cashfree",
+          notes: `Cashfree Payment Verified | Reference ID: ${verification.paymentId || lookupId}`,
+        },
       });
-      if (existing) {
-        await prisma.order.update({
-          where: { orderNumber: targetOrderNumber },
-          data: {
-            paymentStatus: "paid",
-            orderStatus: "Confirmed",
-            paymentMethod: "cashfree",
-            notes: `Cashfree Payment Verified | Reference ID: ${verification.paymentId || lookupId}`,
-          },
-        });
-      }
     } catch (dbErr) {
       console.warn("Could not update order in DB during Cashfree verification:", dbErr);
     }
 
     return NextResponse.json({
       success: true,
-      isPaid: true,
       message: "Cashfree payment successfully verified.",
       orderStatus: "PAID",
       paymentId: verification.paymentId || lookupId,
     });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Error in Cashfree verification endpoint:", error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Internal server error" },
+      { success: false, error: error?.message || "Internal server error" },
       { status: 500 }
     );
   }

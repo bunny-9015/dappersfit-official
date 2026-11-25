@@ -1,7 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
-import { normalizeProductPrice } from "@/lib/brandUtils";
 
 export interface CartItem {
   id: string;
@@ -51,8 +50,6 @@ export const AVAILABLE_PROMOS: PromoCode[] = [
 ];
 
 export const ROLEX_OG_BOX_PRICE = 499;
-export const COD_EXTRA_CHARGE = 300;
-export const COD_ADVANCE_COLLECTION = 300;
 
 interface CartContextType {
   items: CartItem[];
@@ -129,26 +126,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         const parsed = JSON.parse(storedItems);
         if (Array.isArray(parsed)) {
           const sanitized: CartItem[] = parsed
-            .filter((it: unknown): it is Record<string, unknown> => Boolean(it && typeof it === "object"))
-            .map((it) => {
-              const id = String(it.id || Math.random());
+            .filter((it: any) => it && typeof it === "object")
+            .map((it: any) => {
               const brand = String(it.brand || "Luxury");
               const name = String(it.name || "Timepiece");
-              const imageUrl = typeof it.imageUrl === "string" ? it.imageUrl : null;
+              const isRolex = (brand + " " + name).toLowerCase().includes("rolex");
               const rawPrice = Number(it.price) || 0;
-              const price = normalizeProductPrice({
-                id,
-                name,
-                brand,
-                price: rawPrice,
-                imageUrl,
-              });
+              // If it's a Rolex watch, ensure price is 2499
+              const price = isRolex ? 2499 : rawPrice;
               return {
-                id,
-                name,
-                brand,
-                price,
-                imageUrl,
+                id: String(it.id || Math.random()),
+                name: name,
+                brand: brand,
+                price: price,
+                imageUrl: it.imageUrl || null,
                 quantity: Math.max(1, Number(it.quantity) || 1),
               };
             });
@@ -228,16 +219,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     quantity: number = 1
   ) => {
     const pId = String(product.id);
+    const numPrice = Number(product.price) || 0;
+    const numQty = Math.max(1, Number(quantity) || 1);
     const pBrand = String(product.brand || "Luxury");
     const pName = String(product.name || "Timepiece");
-    const numPrice = normalizeProductPrice({
-      id: pId,
-      name: pName,
-      brand: pBrand,
-      price: Number(product.price) || 0,
-      imageUrl: product.imageUrl || null,
-    });
-    const numQty = Math.max(1, Number(quantity) || 1);
 
     setItems((prev) => {
       const existing = prev.find((item) => String(item.id) === pId);
@@ -310,7 +295,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("dappersfit_cart");
       localStorage.removeItem("dappersfit_promo");
       localStorage.removeItem("dappersfit_rolex_box");
-    } catch {
+    } catch (e) {
       // ignore
     }
   };

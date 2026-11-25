@@ -5,65 +5,6 @@ export interface BrandCategory {
   count: number;
 }
 
-export function isAutomaticWatch(product: {
-  id?: string;
-  name?: string;
-  brand?: string;
-  description?: string | null;
-  imageUrl?: string | null;
-}): boolean {
-  const id = (product.id || "").trim();
-  const name = (product.name || "").trim().toLowerCase();
-  const brand = (product.brand || "").trim().toLowerCase();
-  const desc = (product.description || "").trim().toLowerCase();
-  const img = (product.imageUrl || "").trim();
-
-  if (
-    id === "a95c9d1b-174b-40eb-a1a2-a25736d43e33" ||
-    img.includes("IMG-20250117-WA0027") ||
-    (brand.includes("patek") && /\bmodel\s*1\b/i.test(product.name || "")) ||
-    name.includes("automatic") ||
-    desc.includes("automatic")
-  ) {
-    return true;
-  }
-  return false;
-}
-
-export function normalizeProductPrice(product: {
-  id?: string;
-  name?: string;
-  brand?: string;
-  price: number;
-  description?: string | null;
-  imageUrl?: string | null;
-}): number {
-  const brand = (product.brand || "").trim().toLowerCase();
-  const name = (product.name || "").trim().toLowerCase();
-  const combined = `${brand} ${name}`;
-
-  if (brand.includes("patek") || combined.includes("patek philippe")) {
-    return isAutomaticWatch(product) ? 3999 : 2499;
-  }
-
-  if (brand.includes("richard mille") || combined.includes("richard mille")) {
-    return 2799;
-  }
-
-  if (brand.includes("rolex") || combined.includes("rolex")) {
-    return 2499;
-  }
-
-  if (brand === "rado" || combined.includes("rado model")) {
-    if (/\bmodel\s*1\b/i.test(name)) return 2999;
-    if (/\bmodel\s*2\b/i.test(name)) return 2799;
-    if (/\bmodel\s*3\b/i.test(name)) return 3499;
-    if (/\bmodel\s*4\b/i.test(name)) return 3499;
-  }
-
-  return Number(product.price) || 0;
-}
-
 export function formatBrandDisplayName(brand: string): string {
   const trimmed = (brand || "").trim();
   const map: Record<string, string> = {

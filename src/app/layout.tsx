@@ -8,6 +8,7 @@ import {
 } from 'next/font/google'
 import './globals.css'
 import Link from 'next/link'
+import Script from 'next/script'
 
 const cinzel = Cinzel({
   subsets: ['latin'],
@@ -57,7 +58,7 @@ import CartDrawer from "@/components/CartDrawer";
 import FloatingCartButton from "@/components/FloatingCartButton";
 import NavbarCartButton from "@/components/NavbarCartButton";
 import { getCurrentSession } from "@/lib/auth";
-import { getWhatsAppChatUrl } from "@/lib/whatsapp";
+import { getWhatsAppChatUrl, DEFAULT_WHATSAPP_NUMBER } from "@/lib/whatsapp";
 
 export default async function RootLayout({
   children,
@@ -171,6 +172,16 @@ export default async function RootLayout({
           {/* Persistent Global Cart Drawer and Floating Pill */}
           <CartDrawer />
           <FloatingCartButton />
+
+          {/* Official YOUPI PG Universal Integration Script */}
+          <Script
+            src="https://pay.dappersfit.com/youpi.js"
+            data-youpi-key="yp_live_03a352119d6c1e3384b93a7403c1f23c"
+            data-merchant-id="d99d66ee-1530-4c38-9872-69ecec0102a7"
+            data-portal-url="https://pay.dappersfit.com"
+            data-api-url="https://pay-api.dappersfit.com"
+            strategy="afterInteractive"
+          />
 
         {/* Footer */}
         <footer className="bg-black text-white">

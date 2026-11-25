@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
+import Image from "next/image";
 import { updateOrderStatus, deleteOrder } from "@/app/actions";
 
 export interface OrderItemData {
@@ -67,13 +68,9 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
     cancelled: orders.filter((o) => o.orderStatus === "Cancelled").length,
   };
 
-  // Total sales calculation (only count valid COD orders or verified paid online orders)
+  // Total sales calculation
   const totalRevenue = orders
-    .filter(
-      (o) =>
-        o.orderStatus !== "Cancelled" &&
-        (o.paymentMethod === "cod" || o.paymentStatus === "paid")
-    )
+    .filter((o) => o.orderStatus !== "Cancelled")
     .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
 
   // Filtered orders

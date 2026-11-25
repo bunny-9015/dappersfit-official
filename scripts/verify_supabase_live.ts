@@ -3,9 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 async function verify() {
-  const info = await prisma.$queryRaw<
-    Array<{ current_database: string; current_user: string; version: string }>
-  >`SELECT current_database(), current_user, version()`;
+  const info: any[] = await prisma.$queryRaw`SELECT current_database(), current_user, version()`;
   console.log('=== LIVE SUPABASE POSTGRESQL VERIFICATION ===');
   console.log('Connected Database:', info[0].current_database);
   console.log('PostgreSQL User:', info[0].current_user);

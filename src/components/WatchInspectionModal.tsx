@@ -1,11 +1,15 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { ProductData } from "./CatalogSection";
 import { useCart } from "@/context/CartContext";
 import PriceTag from "./PriceTag";
-import { getWhatsAppChatUrl, formatWatchEnquiryMessage } from "@/lib/whatsapp";
-import { isAutomaticWatch } from "@/lib/brandUtils";
+import { openWhatsAppEnquiry, getWhatsAppChatUrl, formatWatchEnquiryMessage } from "@/lib/whatsapp";
+
+const fmt = (val: number | string | undefined | null) => {
+  const n = Number(val);
+  return isNaN(n) ? "0" : n.toLocaleString("en-IN");
+};
 
 interface WatchInspectionModalProps {
   product: ProductData | null;
@@ -28,7 +32,6 @@ export default function WatchInspectionModal({
     (product?.brand || "").toLowerCase().includes("rolex") ||
     (product?.name || "").toLowerCase().includes("rolex")
   );
-  const isAutomatic = product ? isAutomaticWatch(product) : false;
 
   const displayPrice =
     product && isRolex && includeOgRolexBox
@@ -141,6 +144,17 @@ export default function WatchInspectionModal({
     onClose();
   };
 
+  const handleWhatsAppInquiry = () => {
+    if (!product) return;
+    openWhatsAppEnquiry({
+      id: product.id,
+      name: product.name,
+      brand: product.brand,
+      price: product.price,
+      imageUrl: product.imageUrl,
+    });
+  };
+
   const whatsappUrl = product
     ? getWhatsAppChatUrl(
         formatWatchEnquiryMessage({
@@ -207,18 +221,10 @@ export default function WatchInspectionModal({
         {/* LEFT COLUMN: INTERACTIVE ZOOM CHAMBER */}
         <div className="w-full lg:w-7/12 bg-gray-50 border-b lg:border-b-0 lg:border-r border-gray-200 flex flex-col justify-between relative overflow-hidden select-none">
           {/* Top Brand Pill & Loupe Status */}
-          <div className="p-4 sm:p-5 flex items-center justify-between gap-2 flex-wrap z-20">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs uppercase tracking-[0.25em] font-brand font-bold text-[#996515] bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-xs">
-                {product.brand} • Inspection Loupe
-              </span>
-              {isAutomatic && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-brand font-black uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] via-amber-300 to-[#D4AF37] text-black border-2 border-black shadow-md">
-                  <span>⚙️</span>
-                  <span>AUTOMATIC</span>
-                </span>
-              )}
-            </div>
+          <div className="p-4 sm:p-5 flex items-center justify-between z-20">
+            <span className="text-xs uppercase tracking-[0.25em] font-brand font-bold text-[#996515] bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-xs">
+              {product.brand} • Inspection Loupe
+            </span>
 
             {zoomLevel > 1 && (
               <span className="text-xs font-tech font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 animate-pulse">
@@ -315,17 +321,10 @@ export default function WatchInspectionModal({
           {/* Top Info */}
           <div className="space-y-4">
             <div>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-brand font-black tracking-widest text-[#996515] sm:text-[#b8860b] uppercase">
-                    {product.brand}
-                  </span>
-                  {isAutomatic && (
-                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-brand font-black uppercase tracking-widest bg-black text-[#D4AF37] border border-[#D4AF37]">
-                      ⚙️ AUTOMATIC
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-brand font-black tracking-widest text-[#996515] sm:text-[#b8860b] uppercase">
+                  {product.brand}
+                </span>
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-sans font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
                   In Stock • Dispatch in 24h
@@ -349,9 +348,9 @@ export default function WatchInspectionModal({
                 )}
               </div>
               <div className="text-right text-[11px] text-gray-500 space-y-0.5">
-                <span className="block text-emerald-600 font-bold">✓ Prepaid Free Shipping (₹0)</span>
-                <span className="block text-amber-700 font-semibold">COD: ₹300 Advance (Note: ₹300 COD Charges)</span>
+                <span className="block text-emerald-600 font-semibold">✓ Free Express Air Delivery</span>
                 <span className="block">All Taxes & GST Included</span>
+                <span className="block">Cash on Delivery Eligible</span>
               </div>
             </div>
 
@@ -403,9 +402,7 @@ export default function WatchInspectionModal({
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200">
                     <span className="text-[10px] text-gray-400 uppercase block font-medium">Movement</span>
-                    <span className="font-semibold text-gray-800">
-                      {isAutomatic ? "Automatic Mechanical Self-Winding" : "Kinetic Precision Quartz"}
-                    </span>
+                    <span className="font-semibold text-gray-800">Kinetic Precision Quartz</span>
                   </div>
                   <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200">
                     <span className="text-[10px] text-gray-400 uppercase block font-medium">Glass / Crystal</span>
@@ -435,7 +432,7 @@ export default function WatchInspectionModal({
             {activeTab === "delivery" && (
               <div className="space-y-3 text-xs text-gray-700">
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
-                  <span className="text-[#996515] font-bold block">📦 What&apos;s Inside The Box</span>
+                  <span className="text-[#996515] font-bold block">📦 What's Inside The Box</span>
                   <p className="text-[11px] text-gray-600">
                     • 1x {product.brand} Luxury Timepiece
                     <br />• Premium Presentation Display Box
@@ -445,10 +442,9 @@ export default function WatchInspectionModal({
                 </div>
 
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5">
-                  <span className="text-[#996515] font-bold block">✈️ Prepaid Free Shipping & COD Policy</span>
+                  <span className="text-[#996515] font-bold block">✈️ Pan-India Express Delivery</span>
                   <p className="text-[11px] text-gray-600">
-                    • <strong>Prepaid Orders:</strong> FREE Pan-India Express Shipping (₹0 extra charges).
-                    <br />• <strong>Cash on Delivery (COD):</strong> ₹300 advance collection required to book COD (Note: ₹300 COD charges apply; remaining balance payable on delivery).
+                    Dispatched within 24 hours via BlueDart / Delhivery Express. Safe tamper-proof transit packaging.
                   </p>
                 </div>
               </div>

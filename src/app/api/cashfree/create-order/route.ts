@@ -38,10 +38,10 @@ export async function POST(req: NextRequest) {
       env: CASHFREE_ENV,
       isDemo: isCashfreeDemoMode() || orderRes.isDemo,
     });
-  } catch (error: unknown) {
+  } catch (error: any) {
     console.error("Error creating Cashfree order:", error);
     return NextResponse.json(
-      { success: false, error: error instanceof Error ? error.message : "Internal server error" },
+      { success: false, error: error?.message || "Internal server error" },
       { status: 500 }
     );
   }

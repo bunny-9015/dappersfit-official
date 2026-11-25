@@ -2,67 +2,34 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useCart, COD_EXTRA_CHARGE, COD_ADVANCE_COLLECTION } from "@/context/CartContext";
+import { useCart } from "@/context/CartContext";
 import { createOrder, getUserSession } from "@/app/actions";
 import PriceTag from "@/components/PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
-import { isAutomaticWatch } from "@/lib/brandUtils";
-import YoupiCheckoutModal from "@/components/YoupiCheckoutModal";
-
-interface YoupiPayResult {
-  status?: string;
-  order_id?: string;
-  payment_mode?: string;
-  amount_received?: number;
-  utr?: string;
-  reason?: string;
-}
-
-interface YoupiCheckoutOptions {
-  order_id?: string;
-  orderId?: string;
-  amount?: number | string;
-  currency?: string;
-  name?: string;
-  description?: string;
-  paymentId?: string;
-  checkoutUrl?: string;
-  portalUrl?: string;
-  apiUrl?: string;
-  handler?: (result: YoupiPayResult) => void;
-  onSuccess?: (result: YoupiPayResult) => void;
-  onFailed?: (result: YoupiPayResult) => void;
-  onExpired?: (result: YoupiPayResult) => void;
-  onCancelled?: (result: YoupiPayResult) => void;
-  onClose?: () => void;
-}
-
-interface YoupiGlobal {
-  pay: (options: YoupiCheckoutOptions) => Promise<unknown>;
-}
+import YoupiModal from "@/components/YoupiModal";
 
 declare global {
   interface Window {
-    Youpi?: YoupiGlobal;
+    Razorpay?: any;
+    Cashfree?: any;
   }
 }
 
-const loadYoupiSDK = (portalUrl = "http://localhost:7000"): Promise<boolean> => {
+const loadCashfreeSDK = (): Promise<boolean> => {
   return new Promise((resolve) => {
     if (typeof window === "undefined") return resolve(false);
-    if (window.Youpi) return resolve(true);
+    if (window.Cashfree) return resolve(true);
 
-    const existing = document.getElementById("youpi-sdk-script");
+    const existing = document.getElementById("cashfree-sdk-script");
     if (existing) {
-      if (window.Youpi) return resolve(true);
+      if (window.Cashfree) return resolve(true);
       existing.addEventListener("load", () => resolve(true));
-      existing.addEventListener("error", () => resolve(false));
       return;
     }
 
     const script = document.createElement("script");
-    script.id = "youpi-sdk-script";
-    script.src = `${portalUrl.replace(/\/+$/, "")}/youpi.js`;
+    script.id = "cashfree-sdk-script";
+    script.src = "https://sdk.cashfree.com/js/v3/cashfree.js";
     script.async = true;
     script.onload = () => resolve(true);
     script.onerror = () => resolve(false);
@@ -87,6 +54,7 @@ export default function CartPage() {
     applyPromoCode,
     removePromoCode,
     taxAmount,
+    finalTotal,
     availablePromos,
     includeOgRolexBox,
     setIncludeOgRolexBox,
@@ -107,20 +75,22 @@ export default function CartPage() {
   const [orderId, setOrderId] = useState("");
   const [paymentId, setPaymentId] = useState("");
   const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [confirmedTotal, setConfirmedTotal] = useState<number>(0);
-  const [confirmedWhatsAppMsg, setConfirmedWhatsAppMsg] = useState<string>("");
 
-  // YouPI-PG Direct UPI QR Modal State
+  // Razorpay Sandbox Simulation Modal State
   const [showSandboxModal, setShowSandboxModal] = useState(false);
-  const [utrInput, setUtrInput] = useState("");
   const [sandboxOrderData, setSandboxOrderData] = useState<{
     orderId: string;
     orderNumber: string;
     amount: number;
-    payeeVpa?: string;
-    payeeName?: string;
-    upiUri?: string;
-    checkoutUrl?: string;
+  } | null>(null);
+
+  const [showYoupiModal, setShowYoupiModal] = useState(false);
+  const [youpiOrderData, setYoupiOrderData] = useState<{
+    orderNumber: string;
+    amount: number;
+    upiUri: string;
+    payeeVpa: string;
+    payeeName: string;
   } | null>(null);
 
   const [formData, setFormData] = useState({
@@ -131,7 +101,7 @@ export default function CartPage() {
     city: "",
     state: "",
     pincode: "",
-    paymentMethod: "cashfree", // Default: Cashfree Online Payment
+    paymentMethod: "youpi", // Default: YouPI Instant UPI Payment
   });
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
@@ -147,7 +117,7 @@ export default function CartPage() {
             email: prev.email || session.email || "",
           }));
         }
-      } catch {
+      } catch (err) {
         // Non-blocking
       }
     }
@@ -184,121 +154,46 @@ export default function CartPage() {
     return Object.keys(errors).length === 0;
   };
 
-  const isCodSelected = formData.paymentMethod === "cod";
-  const codChargeAmount = isCodSelected ? COD_EXTRA_CHARGE : 0;
-  const effectiveShippingCost = isCodSelected ? shippingCost : 0; // Prepaid Free Ship!
-  const effectiveFinalTotal = Math.max(0, subtotal - discountAmount + effectiveShippingCost + codChargeAmount);
-  const payableNowAmount = isCodSelected ? COD_ADVANCE_COLLECTION : effectiveFinalTotal;
-  const balanceOnDeliveryAmount = isCodSelected ? Math.max(0, effectiveFinalTotal - COD_ADVANCE_COLLECTION) : 0;
+  // Helper to dynamically load the Razorpay checkout script
+  const loadRazorpaySDK = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") return resolve(false);
+      if (window.Razorpay) return resolve(true);
+
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
 
   const formatWhatsAppMessage = (id: string, payStatusText: string, payIdText?: string) => {
-    const isCod = formData.paymentMethod === "cod";
-    const totalWithCod = Math.max(
-      0,
-      subtotal - discountAmount + (isCod ? shippingCost + COD_EXTRA_CHARGE : 0)
-    );
     let msg = `*👑 DAPPERSFIT LUXURY ORDER #${id} 👑*\n\n`;
     msg += `*Items:*\n`;
     items.forEach((item, idx) => {
-      const autoTag = isAutomaticWatch(item) ? " [⚙️ AUTOMATIC]" : "";
-      msg += `${idx + 1}. ${item.brand.toUpperCase()} - ${item.name}${autoTag} (${item.quantity} × ₹${item.price.toLocaleString("en-IN")}) = ₹${(item.quantity * item.price).toLocaleString("en-IN")}\n`;
+      msg += `${idx + 1}. ${item.brand.toUpperCase()} - ${item.name} (${item.quantity} × ₹${item.price.toLocaleString("en-IN")}) = ₹${(item.quantity * item.price).toLocaleString("en-IN")}\n`;
     });
     msg += `\n*Order Breakdown:*\nSubtotal: ₹${subtotal.toLocaleString("en-IN")}\n`;
     if (includeOgRolexBox && hasRolexInCart) {
       msg += `👑 Packaging: Official OG Rolex Luxury Box (+₹${rolexBoxPrice})\n`;
     }
     if (appliedPromo) msg += `Promo (${appliedPromo.code}): -₹${discountAmount.toLocaleString("en-IN")}\n`;
-    if (isCod) {
-      msg += `Shipping: ${shippingCost === 0 ? "FREE Standard" : `₹${shippingCost}`}\n`;
-      msg += `COD Charges: +₹${COD_EXTRA_CHARGE} (Note: ₹300 COD charges)\n`;
-      msg += `GST (18%): Included in price\n`;
-      msg += `*Total Order Amount: ₹${totalWithCod.toLocaleString("en-IN")}*\n`;
-      msg += `*COD Advance Paid: ₹${COD_ADVANCE_COLLECTION.toLocaleString("en-IN")}*\n`;
-      msg += `*Balance Payable on Delivery: ₹${Math.max(0, totalWithCod - COD_ADVANCE_COLLECTION).toLocaleString("en-IN")}*\n\n`;
-    } else {
-      msg += `Shipping: FREE (Prepaid Free Shipping)\n`;
-      msg += `GST (18%): Included in price\n`;
-      msg += `*Total Prepaid Amount: ₹${totalWithCod.toLocaleString("en-IN")}*\n\n`;
-    }
+    msg += `Shipping: ${shippingCost === 0 ? "FREE Pan-India" : `₹${shippingCost}`}\n`;
+    msg += `GST (18%): Included in price\n`;
+    msg += `*Total Amount: ₹${finalTotal.toLocaleString("en-IN")}*\n\n`;
     msg += `*Delivery To:* ${formData.fullName}\n`;
     msg += `*Phone:* ${formData.phone}\n`;
     if (formData.email) msg += `*Email:* ${formData.email}\n`;
     msg += `*Address:* ${formData.address}, ${formData.city || ""} - ${formData.pincode}\n`;
-    msg += `*Payment Method:* ${isCod ? "Cash On Delivery (₹300 Advance Collection + ₹300 COD Charges)" : "Prepaid Online Payment (Free Shipping)"}\n`;
+    msg += `*Payment Method:* ${formData.paymentMethod === "razorpay" ? "Razorpay Online (UPI/Cards)" : "Cash On Delivery"}\n`;
     msg += `*Payment Status:* ${payStatusText}\n`;
     if (payIdText) msg += `*Transaction ID:* ${payIdText}\n`;
     return msg;
   };
 
-  // Helper to persist order in DB ONLY after Online Prepaid OR COD ₹300 Advance is verified
-  const finalizeVerifiedOrderInDb = async (params: {
-    orderNumber: string;
-    paymentMethod: "cod" | "youpi";
-    paymentStatus: "pending" | "paid";
-    orderStatus: "Pending" | "Confirmed";
-    paymentId?: string;
-    payStatusLabel: string;
-  }) => {
-    const isCod = params.paymentMethod === "cod";
-    const computedShipping = isCod ? shippingCost + COD_EXTRA_CHARGE : 0;
-    const computedTotal = Math.max(0, subtotal - discountAmount + computedShipping);
-    const balanceDue = isCod ? Math.max(0, computedTotal - COD_ADVANCE_COLLECTION) : 0;
-
-    await createOrder({
-      orderNumber: params.orderNumber,
-      customerName: formData.fullName,
-      customerPhone: formData.phone,
-      customerEmail: formData.email || undefined,
-      shippingAddress: formData.address,
-      city: formData.city || undefined,
-      state: formData.state || undefined,
-      pincode: formData.pincode || undefined,
-      paymentMethod: params.paymentMethod,
-      paymentStatus: params.paymentStatus,
-      orderStatus: params.orderStatus,
-      notes: isCod
-        ? `COD Order (Note: ₹${COD_EXTRA_CHARGE} COD Charges Applied) | ₹${COD_ADVANCE_COLLECTION} Advance Collected via YouPI-PG (Ref: ${params.paymentId || "N/A"}) | Balance Payable on Delivery: ₹${balanceDue.toLocaleString("en-IN")}`
-        : params.paymentId
-        ? `Prepaid Free Shipping | YouPI-PG Direct UPI Verified (VPA: pinelabs.stq4525474@pineaxis) | Ref: ${params.paymentId}`
-        : undefined,
-      subtotal: subtotal,
-      discountAmount: discountAmount,
-      promoCode: appliedPromo?.code || undefined,
-      shippingCost: computedShipping,
-      shippingMethod: isCod ? "cod_advance_300" : "prepaid_free_ship",
-      taxAmount: taxAmount,
-      totalAmount: computedTotal,
-      items: items.map((it) => ({
-        productId: it.id,
-        productName: it.name,
-        brand: it.brand || "Luxury",
-        price: it.price,
-        quantity: it.quantity,
-        imageUrl: it.imageUrl,
-      })),
-    });
-
-    const msg = formatWhatsAppMessage(
-      params.orderNumber,
-      params.payStatusLabel,
-      params.paymentId
-    );
-    setConfirmedTotal(computedTotal);
-    setConfirmedWhatsAppMsg(msg);
-    setOrderId(params.orderNumber);
-    if (params.paymentId) {
-      setPaymentId(params.paymentId);
-    } else {
-      setPaymentId("");
-    }
-    setIsProcessingPayment(false);
-    setOrderConfirmed(true);
-    clearCart();
-
-    window.open(getWhatsAppChatUrl(msg), "_blank");
-  };
-
-  // Handler for Prepaid (Full Amount, Free Ship) and COD (₹300 Advance Collection, +₹300 COD Charges) via YouPI-PG
+  // Handler for COD and Razorpay payments
   const handleProceedOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentError(null);
@@ -307,229 +202,271 @@ export default function CartPage() {
       return;
     }
 
-    const newId = orderId || `DF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const newId = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
     setOrderId(newId);
     setIsProcessingPayment(true);
 
-    const isCod = formData.paymentMethod === "cod";
-    const chargeNow = isCod ? COD_ADVANCE_COLLECTION : effectiveFinalTotal;
-
     try {
-      const apiRes = await fetch("/api/youpi/create-order", {
+      // 1. If Cash On Delivery
+      if (formData.paymentMethod === "cod") {
+        await createOrder({
+          orderNumber: newId,
+          customerName: formData.fullName,
+          customerPhone: formData.phone,
+          customerEmail: formData.email || undefined,
+          shippingAddress: formData.address,
+          city: formData.city || undefined,
+          state: formData.state || undefined,
+          pincode: formData.pincode || undefined,
+          paymentMethod: "cod",
+          paymentStatus: "pending",
+          subtotal: subtotal,
+          discountAmount: discountAmount,
+          promoCode: appliedPromo?.code || undefined,
+          shippingCost: shippingCost,
+          shippingMethod: shippingMethod,
+          taxAmount: taxAmount,
+          totalAmount: finalTotal,
+          items: items.map((it) => ({
+            productId: it.id,
+            productName: it.name,
+            brand: it.brand || "Luxury",
+            price: it.price,
+            quantity: it.quantity,
+            imageUrl: it.imageUrl,
+          })),
+        });
+
+        setIsProcessingPayment(false);
+        setOrderConfirmed(true);
+        clearCart();
+        return;
+      }
+
+      // 1b. If Online UPI Payment via YouPI-PG
+      if (formData.paymentMethod === "youpi") {
+        try {
+          await createOrder({
+            orderNumber: newId,
+            customerName: formData.fullName,
+            customerPhone: formData.phone,
+            customerEmail: formData.email || undefined,
+            shippingAddress: formData.address,
+            city: formData.city || undefined,
+            state: formData.state || undefined,
+            pincode: formData.pincode || undefined,
+            paymentMethod: "youpi_upi",
+            paymentStatus: "pending",
+            subtotal: subtotal,
+            discountAmount: discountAmount,
+            promoCode: appliedPromo?.code || undefined,
+            shippingCost: shippingCost,
+            shippingMethod: shippingMethod,
+            taxAmount: taxAmount,
+            totalAmount: finalTotal,
+            items: items.map((it) => ({
+              productId: it.id,
+              productName: it.name,
+              brand: it.brand || "Luxury",
+              price: it.price,
+              quantity: it.quantity,
+              imageUrl: it.imageUrl,
+            })),
+          });
+        } catch {
+          // DB sync non-blocking
+        }
+
+        const youpiRes = await fetch("/api/youpi/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: newId,
+            amount: finalTotal,
+            customerName: formData.fullName,
+            customerPhone: formData.phone,
+            customerEmail: formData.email,
+          }),
+        });
+
+        const youpiData = await youpiRes.json();
+        if (!youpiData.success) {
+          throw new Error(youpiData.error || "Failed to initialize UPI session.");
+        }
+
+        setIsProcessingPayment(false);
+        setYoupiOrderData({
+          orderNumber: newId,
+          amount: finalTotal,
+          upiUri: youpiData.upiUri,
+          payeeVpa: youpiData.payeeVpa || "kamathamlokesh9015@dbs",
+          payeeName: youpiData.payeeName || "Dappersfit",
+        });
+        setShowYoupiModal(true);
+        return;
+      }
+
+      // 2. If Online Payment via Cashfree
+      // First save pending order in database
+      await createOrder({
+        orderNumber: newId,
+        customerName: formData.fullName,
+        customerPhone: formData.phone,
+        customerEmail: formData.email || undefined,
+        shippingAddress: formData.address,
+        city: formData.city || undefined,
+        state: formData.state || undefined,
+        pincode: formData.pincode || undefined,
+        paymentMethod: "cashfree",
+        paymentStatus: "pending",
+        subtotal: subtotal,
+        discountAmount: discountAmount,
+        promoCode: appliedPromo?.code || undefined,
+        shippingCost: shippingCost,
+        shippingMethod: shippingMethod,
+        taxAmount: taxAmount,
+        totalAmount: finalTotal,
+        items: items.map((it) => ({
+          productId: it.id,
+          productName: it.name,
+          brand: it.brand || "Luxury",
+          price: it.price,
+          quantity: it.quantity,
+          imageUrl: it.imageUrl,
+        })),
+      });
+
+      // Call our server API to initialize the Cashfree order
+      const apiRes = await fetch("/api/cashfree/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           orderId: newId,
-          amount: chargeNow,
+          amount: finalTotal,
           customerName: formData.fullName,
           customerPhone: formData.phone,
           customerEmail: formData.email,
-          paymentType: isCod ? "cod_advance" : "prepaid",
         }),
       });
 
       const orderData = await apiRes.json();
 
       if (!orderData.success) {
-        throw new Error(orderData.error || "Failed to initiate YouPI-PG payment gateway.");
+        throw new Error(orderData.error || "Failed to initiate Cashfree payment gateway.");
       }
 
-      const portalUrl = orderData.portalUrl || "http://localhost:7000";
-      const scriptLoaded = !orderData.isFallbackModal ? await loadYoupiSDK(portalUrl) : false;
-
-      if (scriptLoaded && window.Youpi && orderData.checkoutUrl) {
-        let settled = false;
-        await window.Youpi.pay({
-          orderId: newId,
-          paymentId: orderData.paymentId,
-          checkoutUrl: orderData.checkoutUrl,
-          portalUrl,
-          amount: chargeNow,
-          currency: "INR",
-          name: "DAPPERSFIT",
-          description: isCod
-            ? `COD ₹${COD_ADVANCE_COLLECTION} Advance Collection (#${newId})`
-            : `Prepaid Order #${newId} (Free Shipping)`,
-          handler: async (result) => {
-            if (settled) return;
-            const status = String(result?.status || "").toUpperCase();
-            if (
-              status === "SUCCESS" ||
-              status === "OBSERVED_SUCCESS" ||
-              status === "RECONCILED" ||
-              status === "MANUAL_REVIEW"
-            ) {
-              settled = true;
-              const verifyRes = await fetch("/api/youpi/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  paymentId: orderData.paymentId,
-                  orderId: newId,
-                  orderNumber: newId,
-                  utr: result?.utr,
-                  isDirectConfirmed: true,
-                }),
-              });
-              const verifyData = await verifyRes.json();
-              if (verifyData.success && verifyData.isPaid) {
-                const refId = verifyData.utr || verifyData.paymentId || orderData.paymentId;
-                await finalizeVerifiedOrderInDb({
-                  orderNumber: newId,
-                  paymentMethod: isCod ? "cod" : "youpi",
-                  paymentStatus: "paid",
-                  orderStatus: "Confirmed",
-                  paymentId: refId,
-                  payStatusLabel: isCod
-                    ? `COD CONFIRMED (₹${COD_ADVANCE_COLLECTION} Advance Paid via YouPI-PG • ₹${balanceOnDeliveryAmount.toLocaleString("en-IN")} Payable on Delivery)`
-                    : "PREPAID PAID VIA YOUPI-PG (FREE SHIPPING)",
-                });
-              } else {
-                setPaymentError(
-                  verifyData.error || "Payment could not be verified. Please try again."
-                );
-                setIsProcessingPayment(false);
-              }
-            }
-          },
-          onCancelled: () => {
-            if (settled) return;
-            settled = true;
-            setPaymentError(
-              "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
-            );
-            setIsProcessingPayment(false);
-          },
-          onFailed: (result) => {
-            if (settled) return;
-            settled = true;
-            setPaymentError(
-              result?.reason ||
-                "Payment verification failed. Your cart items are safe — please retry."
-            );
-            setIsProcessingPayment(false);
-          },
-          onExpired: () => {
-            if (settled) return;
-            settled = true;
-            setPaymentError(
-              "Payment session expired. Your cart items are safe — please retry."
-            );
-            setIsProcessingPayment(false);
-          },
-          onClose: async () => {
-            if (settled) return;
-            try {
-              const verifyRes = await fetch("/api/youpi/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  paymentId: orderData.paymentId,
-                  orderId: newId,
-                  orderNumber: newId,
-                }),
-              });
-              const verifyData = await verifyRes.json();
-              if (verifyData.success && verifyData.isPaid) {
-                settled = true;
-                const refId = verifyData.utr || verifyData.paymentId || orderData.paymentId;
-                await finalizeVerifiedOrderInDb({
-                  orderNumber: newId,
-                  paymentMethod: isCod ? "cod" : "youpi",
-                  paymentStatus: "paid",
-                  orderStatus: "Confirmed",
-                  paymentId: refId,
-                  payStatusLabel: isCod
-                    ? `COD CONFIRMED (₹${COD_ADVANCE_COLLECTION} Advance Paid via YouPI-PG • ₹${balanceOnDeliveryAmount.toLocaleString("en-IN")} Payable on Delivery)`
-                    : "PREPAID PAID VIA YOUPI-PG (FREE SHIPPING)",
-                });
-                return;
-              }
-            } catch {
-              // Ignore
-            }
-            settled = true;
-            setPaymentError(
-              "Payment modal closed before completion. Your cart items are safe — please retry payment."
-            );
-            setIsProcessingPayment(false);
-          },
+      // If running in sandbox demo mode (or credentials are demo placeholder):
+      // Launch our interactive Sandbox modal so the user can test the exact end-to-end flow!
+      if (orderData.isDemo) {
+        setIsProcessingPayment(false);
+        setSandboxOrderData({
+          orderId: orderData.paymentSessionId || orderData.orderId,
+          orderNumber: newId,
+          amount: finalTotal,
         });
+        setShowSandboxModal(true);
         return;
       }
 
-      // Open built-in YouPI-PG Direct VPA QR Modal (pinelabs.stq4525474@pineaxis)
-      setIsProcessingPayment(false);
-      setUtrInput("");
-      setSandboxOrderData({
-        orderId: orderData.paymentId || newId,
-        orderNumber: newId,
-        amount: chargeNow,
-        payeeVpa: orderData.payeeVpa || "pinelabs.stq4525474@pineaxis",
-        payeeName: orderData.payeeName || "DAPPERSFIT",
-        upiUri: orderData.upiUri,
-        checkoutUrl: orderData.checkoutUrl,
+      // If real live/sandbox keys are configured, open the official Cashfree Checkout SDK v3
+      const scriptLoaded = await loadCashfreeSDK();
+      if (!scriptLoaded || !window.Cashfree) {
+        throw new Error("Cashfree SDK could not be loaded. Please check your internet connection.");
+      }
+
+      const cashfree = window.Cashfree({
+        mode: orderData.env === "production" ? "production" : "sandbox",
       });
-      setShowSandboxModal(true);
-    } catch (err: unknown) {
+
+      const checkoutResult = await cashfree.checkout({
+        paymentSessionId: orderData.paymentSessionId,
+        redirectTarget: "_modal",
+      });
+
+      if (checkoutResult && checkoutResult.error) {
+        setPaymentError(checkoutResult.error.message || "Payment cancelled or failed.");
+        setIsProcessingPayment(false);
+        return;
+      }
+
+      // Verify payment with server
+      const verifyRes = await fetch("/api/cashfree/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: newId,
+          orderNumber: newId,
+        }),
+      });
+
+      const verifyResult = await verifyRes.json();
+
+      if (verifyResult.success && verifyResult.orderStatus === "PAID") {
+        const pId = verifyResult.paymentId || `cf_${Date.now()}`;
+        setPaymentId(pId);
+        setOrderConfirmed(true);
+        clearCart();
+
+        const msg = formatWhatsAppMessage(newId, "PAID VIA CASHFREE", pId);
+        window.open(getWhatsAppChatUrl(msg), "_blank");
+      } else {
+        setPaymentError(verifyResult.error || "Payment verification incomplete.");
+      }
+    } catch (err: any) {
       console.error("Order processing error:", err);
-      setPaymentError(
-        err instanceof Error ? err.message : "An error occurred while initiating payment."
-      );
+      setPaymentError(err.message || "An error occurred while initiating payment.");
       setIsProcessingPayment(false);
     }
   };
 
-  // Direct YouPI-PG VPA Payment Verification (UTR / Instant Confirmation)
-  const handleSimulateSandboxPayment = async (customUtr?: string) => {
+  // Simulated Sandbox Payment Completion (for testing before user adds live keys)
+  const handleSimulateSandboxPayment = async (mode: "upi" | "card") => {
     if (!sandboxOrderData) return;
 
-    const finalUtr = (customUtr || utrInput || `UTR${Date.now().toString().slice(-9)}`).trim();
-    if (finalUtr.length < 6) {
-      setPaymentError("Please enter a valid 12-digit UPI UTR / Reference number.");
-      return;
-    }
-
     setIsProcessingPayment(true);
-    const isCod = formData.paymentMethod === "cod";
+    const mockPaymentId = `cf_${mode}_demo_${Math.random().toString(36).substring(2, 9)}`;
 
     try {
-      const verifyRes = await fetch("/api/youpi/verify", {
+      const verifyRes = await fetch("/api/cashfree/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentId: sandboxOrderData.orderId,
           orderId: sandboxOrderData.orderNumber,
           orderNumber: sandboxOrderData.orderNumber,
-          utr: finalUtr,
-          isDirectConfirmed: true,
         }),
       });
 
       const verifyData = await verifyRes.json();
 
-      if (verifyData.success && verifyData.isPaid) {
-        const pId = verifyData.utr || verifyData.paymentId || finalUtr;
+      if (verifyData.success) {
+        setPaymentId(mockPaymentId);
         setShowSandboxModal(false);
-        await finalizeVerifiedOrderInDb({
-          orderNumber: sandboxOrderData.orderNumber,
-          paymentMethod: isCod ? "cod" : "youpi",
-          paymentStatus: "paid",
-          orderStatus: "Confirmed",
-          paymentId: pId,
-          payStatusLabel: isCod
-            ? `COD CONFIRMED (₹${COD_ADVANCE_COLLECTION} Advance Paid via YouPI-PG • UTR: ${pId} • ₹${balanceOnDeliveryAmount.toLocaleString("en-IN")} Payable on Delivery)`
-            : `PREPAID PAID VIA YOUPI-PG (UTR: ${pId} • FREE SHIPPING)`,
-        });
+        setOrderConfirmed(true);
+        clearCart();
+
+        const msg = formatWhatsAppMessage(
+          sandboxOrderData.orderNumber,
+          `PAID VIA CASHFREE (${mode.toUpperCase()} TEST)`,
+          mockPaymentId
+        );
+        window.open(getWhatsAppChatUrl(msg), "_blank");
       } else {
-        setPaymentError(verifyData.error || "Payment verification failed.");
-        setIsProcessingPayment(false);
+        setPaymentError("Sandbox payment simulation failed.");
       }
-    } catch (err: unknown) {
-      console.error("YouPI verify error:", err);
-      setPaymentError("Error verifying YouPI-PG payment.");
+    } catch (err: any) {
+      console.error("Sandbox verify error:", err);
+      setPaymentError("Error completing test payment.");
+    } finally {
       setIsProcessingPayment(false);
     }
+  };
+
+  const handleYoupiPaymentSuccess = (pId: string) => {
+    if (!youpiOrderData) return;
+    setPaymentId(pId);
+    setShowYoupiModal(false);
+    setOrderConfirmed(true);
+    clearCart();
   };
 
   return (
@@ -616,44 +553,26 @@ export default function CartPage() {
               </div>
               {paymentId && (
                 <div className="flex justify-between border-b border-white/5 pb-2">
-                  <span className="text-gray-400">Payment Reference ID:</span>
+                  <span className="text-gray-400">Razorpay Payment ID:</span>
                   <span className="text-emerald-400 font-bold">{paymentId}</span>
                 </div>
               )}
               <div className="flex justify-between border-b border-white/5 pb-2">
                 <span className="text-gray-400">Payment Mode:</span>
                 <span className="text-white">
-                  {formData.paymentMethod === "cod"
-                    ? "Cash On Delivery (₹300 Advance • +₹300 COD Charges)"
-                    : "Prepaid Online (Free Shipping)"}
+                  {formData.paymentMethod === "razorpay" ? "Razorpay Online (UPI/Cards)" : "Cash On Delivery"}
                 </span>
               </div>
               <div className="flex justify-between border-b border-white/5 pb-2">
                 <span className="text-gray-400">Payment Status:</span>
-                <span className="text-emerald-400 font-bold">
-                  {formData.paymentMethod === "cod"
-                    ? "₹300 ADVANCE PAID • CONFIRMED"
-                    : "PREPAID • PAID & CONFIRMED"}
+                <span className={paymentId ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                  {paymentId ? "PAID & CONFIRMED" : "PENDING AT DOORSTEP"}
                 </span>
               </div>
-              {formData.paymentMethod === "cod" && (
-                <>
-                  <div className="flex justify-between border-b border-white/5 pb-2">
-                    <span className="text-gray-400">COD Advance Paid:</span>
-                    <span className="text-emerald-400 font-bold">₹{COD_ADVANCE_COLLECTION}</span>
-                  </div>
-                  <div className="flex justify-between border-b border-white/5 pb-2">
-                    <span className="text-gray-400">Balance Payable on Delivery:</span>
-                    <span className="text-amber-400 font-bold">
-                      ₹{Math.max(0, (confirmedTotal || effectiveFinalTotal) - COD_ADVANCE_COLLECTION).toLocaleString("en-IN")}
-                    </span>
-                  </div>
-                </>
-              )}
               <div className="flex justify-between pt-1">
-                <span className="text-gray-400">Total Order Value:</span>
+                <span className="text-gray-400">Total Paid / Payable:</span>
                 <span className="text-white font-bold text-sm">
-                  ₹{(confirmedTotal || effectiveFinalTotal).toLocaleString("en-IN")}
+                  ₹{finalTotal.toLocaleString("en-IN")}
                 </span>
               </div>
               <div className="text-[11px] text-gray-500 pt-1">
@@ -665,12 +584,11 @@ export default function CartPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
               <a
                 href={getWhatsAppChatUrl(
-                  confirmedWhatsAppMsg ||
-                    formatWhatsAppMessage(
-                      orderId,
-                      paymentId ? "PAID VIA CASHFREE" : "Cash on Delivery",
-                      paymentId || undefined
-                    )
+                  formatWhatsAppMessage(
+                    orderId,
+                    paymentId ? "PAID VIA RAZORPAY" : "Cash on Delivery",
+                    paymentId || undefined
+                  )
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -732,16 +650,9 @@ export default function CartPage() {
                       <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-[11px] font-bold uppercase tracking-wider text-[#D4AF37]">
-                                {item.brand}
-                              </span>
-                              {isAutomaticWatch(item) && (
-                                <span className="px-2 py-0.5 rounded-full text-[10px] font-brand font-black uppercase tracking-widest bg-gradient-to-r from-[#D4AF37] via-amber-300 to-[#D4AF37] text-black border border-black shadow">
-                                  ⚙️ AUTOMATIC
-                                </span>
-                              )}
-                            </div>
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-[#D4AF37]">
+                              {item.brand}
+                            </span>
                             <h3 className="text-base font-bold text-white truncate">{item.name}</h3>
                             <div className="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
                               <span>Price:</span>
@@ -937,51 +848,54 @@ export default function CartPage() {
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Option 1: Prepaid Online Payment (FREE SHIPPING) */}
+                        {/* Option 1: YouPI-PG Gateway (Direct Pine Labs UPI) */}
                         <label
                           className={`p-4 rounded-2xl border cursor-pointer transition relative flex flex-col justify-between ${
-                            formData.paymentMethod === "cashfree"
-                              ? "bg-gradient-to-br from-emerald-950/50 via-[#0038FF]/20 to-[#D4AF37]/10 border-emerald-400 text-white shadow-lg shadow-emerald-500/10"
+                            formData.paymentMethod === "youpi"
+                              ? "bg-gradient-to-br from-emerald-950/40 via-neutral-900 to-[#D4AF37]/10 border-[#D4AF37] text-white shadow-lg shadow-emerald-950/40"
                               : "bg-neutral-900 border-white/10 text-gray-400 hover:border-white/20"
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start justify-between">
                             <div className="flex items-center gap-2">
                               <input
                                 type="radio"
                                 name="pay"
-                                checked={formData.paymentMethod === "cashfree"}
-                                onChange={() => setFormData({ ...formData, paymentMethod: "cashfree" })}
-                                className="accent-emerald-400"
+                                checked={formData.paymentMethod === "youpi"}
+                                onChange={() => setFormData({ ...formData, paymentMethod: "youpi" })}
+                                className="accent-[#D4AF37]"
                               />
                               <div>
-                                <p className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
-                                  <span>Prepaid Online</span>
-                                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                                    FREE SHIP
+                                <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <span>Instant UPI</span>
+                                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono font-semibold">
+                                    DIRECT PINE LABS
                                   </span>
                                 </p>
-                                <p className="text-[10px] text-gray-300 mt-0.5">
-                                  UPI (GPay / PhonePe / Paytm), Cards & Netbanking
+                                <p className="text-[10px] text-gray-400 mt-0.5">
+                                  GPay, PhonePe, Paytm, BHIM & Instant Verification
                                 </p>
                               </div>
                             </div>
+                            <span className="text-[10px] bg-[#D4AF37]/20 text-[#D4AF37] px-2 py-0.5 rounded-full font-bold">
+                              FASTEST
+                            </span>
                           </div>
 
-                          <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10 text-[10px]">
-                            <span className="text-emerald-400 font-bold">🚚 Prepaid Free Shipping (Save ₹300)</span>
+                          <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5 text-[10px] text-gray-400">
+                            <span className="text-emerald-400 font-medium">⚡ Zero Gateway Fees • Direct UPI</span>
                           </div>
                         </label>
 
-                        {/* Option 2: Cash on Delivery (₹300 Advance Collection + Note: ₹300 COD Charges) */}
+                        {/* Option 2: Cash on Delivery */}
                         <label
                           className={`p-4 rounded-2xl border cursor-pointer transition relative flex flex-col justify-between ${
                             formData.paymentMethod === "cod"
-                              ? "bg-gradient-to-br from-amber-500/20 via-neutral-900 to-transparent border-[#D4AF37] text-white shadow-lg shadow-[#D4AF37]/15"
+                              ? "bg-gradient-to-br from-white/10 to-transparent border-[#D4AF37] text-white"
                               : "bg-neutral-900 border-white/10 text-gray-400 hover:border-white/20"
                           }`}
                         >
-                          <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-start justify-between">
                             <div className="flex items-center gap-2">
                               <input
                                 type="radio"
@@ -991,46 +905,17 @@ export default function CartPage() {
                                 className="accent-[#D4AF37]"
                               />
                               <div>
-                                <p className="text-xs font-bold text-white flex items-center gap-1.5 flex-wrap">
-                                  <span>Cash on Delivery (COD)</span>
-                                  <span className="text-[9px] bg-amber-500/20 text-[#D4AF37] border border-[#D4AF37]/50 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                                    ₹300 ADVANCE
-                                  </span>
-                                </p>
-                                <p className="text-[10px] text-amber-200/90 mt-0.5 font-medium">
-                                  Pay ₹300 advance now • Balance on delivery
-                                </p>
+                                <p className="text-xs font-bold text-white">Cash on Delivery</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">Pay in cash upon doorstep delivery</p>
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10 text-[10px]">
-                            <span className="text-amber-400 font-bold">⚠ Note: ₹300 COD charges apply</span>
+                          <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5 text-[10px] text-gray-400">
+                            <span>📦 Verified courier handover</span>
                           </div>
                         </label>
                       </div>
-
-                      {/* Highlighted Note Banner for COD vs Prepaid */}
-                      {formData.paymentMethod === "cod" ? (
-                        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-[#D4AF37]/50 text-xs space-y-1.5">
-                          <div className="flex items-center justify-between font-bold text-[#D4AF37]">
-                            <span>📌 COD ₹300 Advance Collection Policy</span>
-                            <span className="bg-[#D4AF37] text-black px-2 py-0.5 rounded text-[10px] font-black uppercase">
-                              Note: ₹300 COD Charges
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-gray-300 leading-relaxed">
-                            • <strong>Note: ₹300 COD charges</strong> are added to Cash on Delivery orders.
-                            <br />• <strong>₹300 Advance Collection</strong> is payable online now to confirm dispatch.
-                            <br />• Remaining balance of <strong>₹{balanceOnDeliveryAmount.toLocaleString("en-IN")}</strong> is payable in cash at your doorstep upon delivery.
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-xs flex items-center justify-between text-emerald-300">
-                          <span className="font-bold">🎉 Prepaid Free Shipping Active!</span>
-                          <span className="text-[11px] font-semibold">₹0 Shipping • ₹0 COD Charges</span>
-                        </div>
-                      )}
                     </div>
 
                     {/* Submit / Proceed to Pay Button */}
@@ -1045,12 +930,12 @@ export default function CartPage() {
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                           </svg>
-                          <span>Processing Payment...</span>
+                          <span>Processing Order...</span>
                         </>
-                      ) : formData.paymentMethod === "cashfree" ? (
-                        <span>🔒 Pay ₹{effectiveFinalTotal.toLocaleString("en-IN")} Online (Prepaid Free Ship)</span>
+                      ) : formData.paymentMethod === "razorpay" ? (
+                        <span>🔒 Pay ₹{finalTotal.toLocaleString("en-IN")} via Razorpay</span>
                       ) : (
-                        <span>🔒 Pay ₹{COD_ADVANCE_COLLECTION} COD Advance (Balance ₹{balanceOnDeliveryAmount.toLocaleString("en-IN")} on Delivery)</span>
+                        <span>Place Order (Cash on Delivery ₹{finalTotal.toLocaleString("en-IN")})</span>
                       )}
                     </button>
                   </form>
@@ -1254,22 +1139,15 @@ export default function CartPage() {
                   )}
 
                   <div className="flex justify-between text-gray-300">
-                    <span>Shipping</span>
+                    <span>Estimated Shipping</span>
                     <span>
-                      {!isCodSelected || shippingCost === 0 ? (
-                        <span className="text-emerald-400 font-bold">FREE (Prepaid Free Ship)</span>
+                      {shippingCost === 0 ? (
+                        <span className="text-emerald-400 font-medium">FREE Pan-India</span>
                       ) : (
                         <span className="text-white font-medium">₹{shippingCost}</span>
                       )}
                     </span>
                   </div>
-
-                  {isCodSelected && (
-                    <div className="flex justify-between text-amber-400 font-semibold text-xs bg-amber-500/10 border border-amber-500/30 px-3 py-2 rounded-xl">
-                      <span>Note: ₹300 COD Charges</span>
-                      <span className="font-tech font-bold">+₹{COD_EXTRA_CHARGE}</span>
-                    </div>
-                  )}
 
                   <div className="flex justify-between text-gray-400 text-xs">
                     <span>Taxes (GST 18%)</span>
@@ -1278,26 +1156,11 @@ export default function CartPage() {
 
                   <div className="border-t border-white/10 pt-4 flex justify-between items-baseline">
                     <div>
-                      <span className="text-lg font-bold text-white">Total Order Cost</span>
-                      <p className="text-xs text-gray-400">
-                        {isCodSelected ? "Includes ₹300 COD charges" : "Prepaid Free Shipping applied"}
-                      </p>
+                      <span className="text-lg font-bold text-white">Total Cost</span>
+                      <p className="text-xs text-gray-400">Final price to be paid</p>
                     </div>
-                    <PriceTag price={effectiveFinalTotal} size="xl" showOriginal={false} />
+                    <PriceTag price={finalTotal} size="xl" showOriginal={false} />
                   </div>
-
-                  {isCodSelected && (
-                    <div className="p-3.5 rounded-2xl bg-neutral-900 border border-[#D4AF37]/40 space-y-2 text-xs">
-                      <div className="flex justify-between items-center text-[#D4AF37] font-bold">
-                        <span>COD Advance Collection (Pay Now):</span>
-                        <span className="text-sm font-tech">₹{payableNowAmount.toLocaleString("en-IN")}</span>
-                      </div>
-                      <div className="flex justify-between items-center text-gray-300 pt-1 border-t border-white/10">
-                        <span>Balance Payable on Delivery:</span>
-                        <span className="font-bold text-white font-tech">₹{balanceOnDeliveryAmount.toLocaleString("en-IN")}</span>
-                      </div>
-                    </div>
-                  )}
 
                   {discountAmount > 0 && (
                     <div className="text-center py-2 px-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-300 text-xs font-bold">
@@ -1336,22 +1199,102 @@ export default function CartPage() {
         )}
       </div>
 
-      {/* YOUPI-PG WHITE-LABEL CHECKOUT MODAL (Shared Component) */}
-      <YoupiCheckoutModal
-        isOpen={showSandboxModal}
-        orderData={sandboxOrderData}
-        customerName={formData.fullName}
-        customerPhone={formData.phone}
-        isProcessing={isProcessingPayment}
-        onVerifyUtr={(utr) => handleSimulateSandboxPayment(utr)}
-        onClose={() => {
-          setShowSandboxModal(false);
-          setIsProcessingPayment(false);
-          setPaymentError(
-            "Payment was cancelled or incomplete. Your cart items are safe — please retry payment."
-          );
-        }}
-      />
+      {/* CASHFREE SANDBOX TEST MODAL (Opens for testing before user adds live credentials) */}
+      {showSandboxModal && sandboxOrderData && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-neutral-950 border border-[#D4AF37]/60 rounded-3xl max-w-md w-full p-6 space-y-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-[#D4AF37] font-bold">
+                    Cashfree Sandbox Simulator
+                  </span>
+                </div>
+                <h3 className="text-xl font-bold font-serif text-white">
+                  Test Cashfree Payment
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSandboxModal(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Test Mode Notification Box */}
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 text-xs text-blue-200 space-y-1">
+              <p className="font-bold flex items-center gap-1.5 text-blue-300">
+                <span>ℹ</span> Cashfree Sandbox Active
+              </p>
+              <p className="text-gray-300 text-[11px] leading-relaxed">
+                Your payment gateway is configured in <strong>Cashfree Sandbox Mode</strong>. You can test the full instant payment lifecycle (UPI, Cards, Order DB confirmation & WhatsApp receipts) without real money being debited.
+              </p>
+            </div>
+
+            {/* Order Details */}
+            <div className="bg-neutral-900 rounded-2xl p-4 border border-white/5 space-y-2 text-xs font-mono">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Order Ref:</span>
+                <span className="text-white font-bold">#{sandboxOrderData.orderNumber}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Cashfree Session:</span>
+                <span className="text-blue-300 truncate max-w-[180px]">{sandboxOrderData.orderId}</span>
+              </div>
+              <div className="flex justify-between pt-2 border-t border-white/5 text-sm">
+                <span className="text-gray-300">Amount Due:</span>
+                <span className="text-[#D4AF37] font-bold">₹{sandboxOrderData.amount.toLocaleString("en-IN")}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <button
+                onClick={() => handleSimulateSandboxPayment("upi")}
+                disabled={isProcessingPayment}
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <span>⚡ Simulate UPI Success (Google Pay / PhonePe)</span>
+              </button>
+
+              <button
+                onClick={() => handleSimulateSandboxPayment("card")}
+                disabled={isProcessingPayment}
+                className="w-full py-3.5 bg-gradient-to-r from-[#172B55] to-[#102044] hover:from-[#1e3870] hover:to-[#172b55] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition border border-white/10 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                <span>💳 Simulate Credit / Debit Card Success</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowSandboxModal(false);
+                  setPaymentError("Payment was cancelled in test mode.");
+                }}
+                className="w-full py-2.5 text-xs text-gray-400 hover:text-white transition"
+              >
+                Cancel / Simulate Failed Transaction
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* YouPI UPI Payment Modal */}
+      {youpiOrderData && (
+        <YoupiModal
+          isOpen={showYoupiModal}
+          onClose={() => setShowYoupiModal(false)}
+          orderNumber={youpiOrderData.orderNumber}
+          amount={youpiOrderData.amount}
+          upiUri={youpiOrderData.upiUri}
+          payeeVpa={youpiOrderData.payeeVpa}
+          payeeName={youpiOrderData.payeeName}
+          onPaymentSuccess={handleYoupiPaymentSuccess}
+        />
+      )}
     </div>
   );
 }

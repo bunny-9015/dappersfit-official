@@ -3,7 +3,6 @@ import HeroVideo from "@/components/HeroVideo";
 import CatalogSection from "@/components/CatalogSection";
 import CustomerReviewsSection from "@/components/CustomerReviewsSection";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
-import { isAutomaticWatch, normalizeProductPrice } from "@/lib/brandUtils";
 
 export default async function Home({
   searchParams,
@@ -13,18 +12,8 @@ export default async function Home({
   const resolvedParams = searchParams ? await searchParams : {};
   const initialBrand = resolvedParams?.brand || "";
 
-  let categories: Array<{ id: string; name: string; slug: string }> = [];
-  let products: Array<{
-    id: string;
-    name: string;
-    brand: string;
-    price: number;
-    description: string;
-    imageUrl: string | null;
-    inStock: boolean;
-    quantity: number;
-    categoryId: string;
-  }> = [];
+  let categories: any[] = [];
+  let products: any[] = [];
 
   try {
     categories = await prisma.category.findMany({
@@ -36,7 +25,7 @@ export default async function Home({
   } catch (error) {
     console.error("Database query error on homepage, activating resilient fallback:", error);
     try {
-      const seedData = await import("../../prisma/supabase_seed_data.json");
+      const seedData = require("../../prisma/supabase_seed_data.json");
       categories = seedData.categories || [];
       products = seedData.products || [];
     } catch (e) {
@@ -82,13 +71,13 @@ export default async function Home({
             </div>
             <div className="flex flex-col items-center gap-1.5">
               <span className="text-[#996515] text-lg font-bold">✓</span>
-              <span className="text-gray-900 font-bold tracking-wider">Prepaid Free Ship</span>
-              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">₹0 shipping on prepaid</span>
+              <span className="text-gray-900 font-bold tracking-wider">Pan-India Express</span>
+              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">doorstep delivery</span>
             </div>
             <div className="flex flex-col items-center gap-1.5">
               <span className="text-[#996515] text-lg font-bold">✓</span>
-              <span className="text-gray-900 font-bold tracking-wider">COD ₹300 Advance</span>
-              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">note: ₹300 COD charges</span>
+              <span className="text-gray-900 font-bold tracking-wider">WhatsApp Checkout</span>
+              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">instant order support</span>
             </div>
             <div className="flex flex-col items-center gap-1.5">
               <span className="text-[#996515] text-lg font-bold">✓</span>
@@ -101,23 +90,17 @@ export default async function Home({
 
       {/* 3. All-in-One Catalog with Integrated Cart right on this page */}
       <CatalogSection
-        products={products.map((p) => {
-          const auto = isAutomaticWatch(p);
-          return {
-            id: p.id,
-            name: p.name,
-            brand: p.brand,
-            price: normalizeProductPrice(p),
-            description:
-              auto && !p.description.toLowerCase().includes("automatic")
-                ? "An exquisite Automatic mechanical luxury timepiece from Patek Philippe."
-                : p.description,
-            imageUrl: p.imageUrl,
-            inStock: p.inStock,
-            quantity: p.quantity,
-            categoryId: p.categoryId,
-          };
-        })}
+        products={products.map((p) => ({
+          id: p.id,
+          name: p.name,
+          brand: p.brand,
+          price: p.price,
+          description: p.description,
+          imageUrl: p.imageUrl,
+          inStock: p.inStock,
+          quantity: p.quantity,
+          categoryId: p.categoryId,
+        }))}
         categories={categories.map((c) => ({
           id: c.id,
           name: c.name,

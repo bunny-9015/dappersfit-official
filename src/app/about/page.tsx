@@ -13,7 +13,7 @@ export default function About() {
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-gray-900">Who We Are</h2>
               <p className="mt-4 text-lg text-gray-500">
-                DappersFit is a premier destination for watch enthusiasts and collectors. We specialize in sourcing, authenticating, and delivering the world&apos;s most sought-after luxury timepieces.
+                DappersFit is a premier destination for watch enthusiasts and collectors. We specialize in sourcing, authenticating, and delivering the world's most sought-after luxury timepieces.
               </p>
             </div>
 

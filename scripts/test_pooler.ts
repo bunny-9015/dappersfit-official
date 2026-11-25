@@ -14,8 +14,8 @@ async function testPooler(port: number, pgbouncer: boolean) {
     console.log(`✅ Success on port ${port}! Total products: ${count}`);
     await prisma.$disconnect();
     return true;
-  } catch (err: unknown) {
-    console.error(`❌ Failed on port ${port}:`, err instanceof Error ? err.message : err);
+  } catch (err: any) {
+    console.error(`❌ Failed on port ${port}:`, err.message);
     await prisma.$disconnect();
     return false;
   }

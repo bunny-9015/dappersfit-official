@@ -1,330 +1,218 @@
-import crypto from "crypto";
-
 /**
- * YouPI-PG V2 Self-Hosted Direct UPI Payment Gateway Integration
- * Configured for DAPPERSFIT (VPA: pinelabs.stq4525474@pineaxis)
+ * YouPI-PG Gateway Integration for DappersFit Luxury Watches
+ * Self-hosted UPI Payment Gateway with zero aggregator KYC lockouts
  */
 
+import crypto from "crypto";
+
 export const YOUPI_API_URL =
-  process.env.YOUPI_API_URL ||
-  process.env.NEXT_PUBLIC_YOUPI_API_URL ||
-  "http://localhost:6100";
-
-export const YOUPI_CHECKOUT_URL =
-  process.env.YOUPI_CHECKOUT_URL ||
-  process.env.NEXT_PUBLIC_YOUPI_CHECKOUT_URL ||
-  "http://localhost:7000";
-
+  process.env.YOUPI_API_URL || "https://pay-api.dappersfit.com";
+export const YOUPI_PORTAL_URL =
+  process.env.YOUPI_PORTAL_URL || "https://pay.dappersfit.com";
 export const YOUPI_MERCHANT_ID =
-  process.env.YOUPI_MERCHANT_ID || "00000000-0000-0000-0000-000000000001";
-
-export const YOUPI_MERCHANT_KEY =
-  process.env.YOUPI_MERCHANT_API_KEY ||
-  process.env.YOUPI_WEBHOOK_SECRET ||
-  "aa9338a6e5b5adc179063ec1ac1f902203ab9d1bcd8c5ef456603241ff40e972";
-
+  process.env.YOUPI_MERCHANT_ID || "d99d66ee-1530-4c38-9872-69ecec0102a7";
+export const YOUPI_API_KEY =
+  process.env.YOUPI_API_KEY || "yp_live_03a352119d6c1e3384b93a7403c1f23c";
+export const YOUPI_ADMIN_TOKEN =
+  process.env.YOUPI_ADMIN_TOKEN || "42c8c6b68100cc4d92e1579e3c3526cd4dda8b581d59ffd9f10a185adc3af288";
 export const YOUPI_WEBHOOK_SECRET =
-  process.env.YOUPI_WEBHOOK_SECRET ||
-  "aa9338a6e5b5adc179063ec1ac1f902203ab9d1bcd8c5ef456603241ff40e972";
-
-export const YOUPI_PAYEE_VPA =
-  process.env.YOUPI_PAYEE_VPA || "pinelabs.stq4525474@pineaxis";
-
+  process.env.YOUPI_WEBHOOK_SECRET || "45c8be24f481af99eaf98e58a87831f765d033d5c33e6d3e21629074db536aec";
+export const YOUPI_VPA =
+  process.env.YOUPI_VPA || "kamathamlokesh9015@dbs";
 export const YOUPI_PAYEE_NAME =
-  process.env.YOUPI_PAYEE_NAME || "DAPPERSFIT";
+  process.env.YOUPI_PAYEE_NAME || "Dappersfit";
 
-export const YOUPI_SUPPORT_PHONE =
-  process.env.YOUPI_SUPPORT_PHONE || "7702049015";
-
-export interface CreateYoupiOrderParams {
+export interface CreateYoupiSessionParams {
   orderId: string;
-  orderAmount: number;
-  customerName: string;
-  customerPhone: string;
+  amount: number;
+  customerName?: string;
+  customerPhone?: string;
   customerEmail?: string;
   returnUrl?: string;
-  paymentType?: "prepaid" | "cod_advance";
 }
 
-export interface YoupiOrderResponse {
+export interface YoupiSessionResponse {
   success: boolean;
   orderId: string;
-  paymentId: string;
-  checkoutUrl: string;
-  portalUrl: string;
-  orderAmount: number;
+  sessionId?: string;
+  paymentId?: string;
+  amount: number;
   currency: string;
+  upiUri: string;
+  qrPayload: string;
   payeeVpa: string;
   payeeName: string;
-  upiUri: string;
-  isFallbackModal: boolean;
+  checkoutUrl?: string;
+  isSimulator?: boolean;
   error?: string;
 }
 
-export function buildDirectUpiUri(params: {
-  orderId: string;
+/**
+ * Builds a compliant NPCI UPI payment deep-link URI.
+ */
+export function buildUpiUri(params: {
+  vpa: string;
+  payeeName: string;
   amount: number;
-  payeeVpa?: string;
-  payeeName?: string;
+  orderId: string;
 }): string {
-  const vpa = params.payeeVpa || YOUPI_PAYEE_VPA;
-  const name = params.payeeName || YOUPI_PAYEE_NAME;
-  const amt = Number(params.amount).toFixed(2);
-  const tr = encodeURIComponent(params.orderId);
-  const pn = encodeURIComponent(name);
-  const tn = encodeURIComponent(`DAPPERSFIT Order ${params.orderId}`);
-  return `upi://pay?pa=${vpa}&pn=${pn}&am=${amt}&cu=INR&tr=${tr}&tn=${tn}`;
+  const { vpa, payeeName, amount, orderId } = params;
+  const note = encodeURIComponent(`Order ${orderId}`);
+  const pn = encodeURIComponent(payeeName);
+  return `upi://pay?pa=${vpa}&pn=${pn}&am=${amount.toFixed(2)}&tr=${orderId}&tn=${note}&cu=INR`;
 }
 
 /**
- * Creates a payment session on the YouPI-PG Payment API (:6100)
+ * Creates a YouPI payment session via the self-hosted YouPI API.
+ * Falls back to direct dynamic UPI intent if the local daemon is unreachable.
  */
-export async function createYoupiOrder(
-  params: CreateYoupiOrderParams
-): Promise<YoupiOrderResponse> {
-  const {
+export async function createYoupiSession(
+  params: CreateYoupiSessionParams
+): Promise<YoupiSessionResponse> {
+  const { orderId, amount, customerName, customerPhone, customerEmail, returnUrl } = params;
+  const upiUri = buildUpiUri({
+    vpa: YOUPI_VPA,
+    payeeName: YOUPI_PAYEE_NAME,
+    amount,
     orderId,
-    orderAmount,
-    customerName,
-    customerPhone,
-    customerEmail,
-    returnUrl,
-    paymentType = "prepaid",
-  } = params;
-
-  const cleanPhone = customerPhone.replace(/\D/g, "").slice(-10) || "7702049015";
-  const cleanEmail =
-    customerEmail && customerEmail.includes("@")
-      ? customerEmail
-      : `customer.${cleanPhone}@dappersfit.com`;
-
-  const upiUri = buildDirectUpiUri({
-    orderId,
-    amount: orderAmount,
   });
 
   try {
-    const response = await fetch(`${YOUPI_API_URL}/api/v1/payments`, {
+    const cleanPhone = customerPhone ? customerPhone.replace(/\D/g, "").slice(-10) : undefined;
+    const payload = {
+      orderId,
+      amount: amount.toFixed(2),
+      currency: "INR",
+      customer: {
+        name: customerName || "Customer",
+        mobileNumber: cleanPhone,
+        phoneNumber: cleanPhone,
+        email: customerEmail || undefined,
+      },
+      customerName: customerName || "Customer",
+      customerPhone: cleanPhone,
+      customerEmail: customerEmail || undefined,
+      returnUrl: returnUrl || `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.dappersfit.com"}/cart?order_id=${orderId}`,
+    };
+
+    const res = await fetch(`${YOUPI_API_URL}/api/v1/payments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Merchant-Id": YOUPI_MERCHANT_ID,
-        "X-Merchant-Key": YOUPI_MERCHANT_KEY,
-        "Idempotency-Key": `youpi_${orderId}_${Math.round(orderAmount * 100)}`,
+        "X-Merchant-Key": YOUPI_API_KEY,
       },
-      body: JSON.stringify({
-        orderId,
-        amount: Number(orderAmount).toFixed(2),
-        currency: "INR",
-        method: "UPI",
-        autoActivate: true,
-        returnUrl: returnUrl || "http://localhost:3000/cart",
-        customer: {
-          fullName: customerName || "DappersFit Customer",
-          phoneNumber: cleanPhone,
-          mobileNumber: cleanPhone,
-          email: cleanEmail,
-        },
-        metadata: {
-          store: "DAPPERSFIT",
-          paymentType,
-          customerName,
-          customerPhone: cleanPhone,
-        },
-      }),
-      cache: "no-store",
+      body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
-
-    if (!response.ok || !data.paymentId) {
-      console.warn("YouPI-PG API returned non-200, activating direct YouPI QR modal:", data);
-      const fallbackId = `youpi_direct_${Date.now()}`;
+    if (res.ok) {
+      const data = await res.json();
+      const pid = data.id || data.paymentId || data.sessionId;
       return {
         success: true,
         orderId,
-        paymentId: fallbackId,
-        checkoutUrl: `${YOUPI_CHECKOUT_URL}/checkout/${fallbackId}`,
-        portalUrl: YOUPI_CHECKOUT_URL,
-        orderAmount,
+        sessionId: pid,
+        paymentId: pid,
+        amount,
         currency: "INR",
-        payeeVpa: YOUPI_PAYEE_VPA,
-        payeeName: YOUPI_PAYEE_NAME,
-        upiUri,
-        isFallbackModal: true,
+        upiUri: data.upiUri || data.intentUrl || upiUri,
+        qrPayload: data.qrPayload || data.upiUri || upiUri,
+        payeeVpa: data.vpa || YOUPI_VPA,
+        payeeName: data.payeeName || YOUPI_PAYEE_NAME,
+        checkoutUrl: data.checkoutUrl,
+        isSimulator: false,
       };
     }
-
-    return {
-      success: true,
-      orderId: data.orderId || orderId,
-      paymentId: data.paymentId,
-      checkoutUrl:
-        data.checkoutUrl || `${YOUPI_CHECKOUT_URL}/checkout/${data.paymentId}`,
-      portalUrl: YOUPI_CHECKOUT_URL,
-      orderAmount,
-      currency: data.currency || "INR",
-      payeeVpa: YOUPI_PAYEE_VPA,
-      payeeName: YOUPI_PAYEE_NAME,
-      upiUri,
-      isFallbackModal: false,
-    };
-  } catch (err: unknown) {
-    console.warn("YouPI-PG service unreachable on :6100, using direct YouPI VPA modal:", err);
-    const fallbackId = `youpi_direct_${Date.now()}`;
-    return {
-      success: true,
-      orderId,
-      paymentId: fallbackId,
-      checkoutUrl: `${YOUPI_CHECKOUT_URL}/checkout/${fallbackId}`,
-      portalUrl: YOUPI_CHECKOUT_URL,
-      orderAmount,
-      currency: "INR",
-      payeeVpa: YOUPI_PAYEE_VPA,
-      payeeName: YOUPI_PAYEE_NAME,
-      upiUri,
-      isFallbackModal: true,
-    };
+  } catch (err) {
+    // Graceful fallback to direct UPI QR intent
   }
+
+  const localId = `youpi_local_${Date.now()}`;
+  return {
+    success: true,
+    orderId,
+    sessionId: localId,
+    paymentId: localId,
+    amount,
+    currency: "INR",
+    upiUri,
+    qrPayload: upiUri,
+    payeeVpa: YOUPI_VPA,
+    payeeName: YOUPI_PAYEE_NAME,
+    isSimulator: true,
+  };
 }
 
 /**
- * Verifies a YouPI-PG payment session status from the Payment API (:6100)
+ * Reconciles/confirms payment in YouPI-PG's database so merchant dashboard metrics update in real-time.
  */
-export async function verifyYoupiOrder(
-  paymentId: string,
-  options?: {
-    utr?: string;
-    isDirectConfirmed?: boolean;
-  }
-): Promise<{
-  success: boolean;
-  orderStatus: string;
-  isPaid: boolean;
-  paymentId: string;
-  utr?: string;
-  error?: string;
-}> {
-  if (paymentId.startsWith("youpi_direct_")) {
-    if (options?.isDirectConfirmed && options?.utr && options.utr.trim().length >= 6) {
-      return {
-        success: true,
-        orderStatus: "PAID",
-        isPaid: true,
-        paymentId,
-        utr: options.utr.trim(),
-      };
-    }
-    return {
-      success: false,
-      orderStatus: "CANCELLED",
-      isPaid: false,
-      paymentId,
-      error: "Payment was cancelled or UTR was not provided.",
-    };
-  }
-
+export async function confirmYoupiPayment(
+  paymentIdOrOrderId: string,
+  notes = "Confirmed by customer UTR"
+): Promise<boolean> {
   try {
-    const res = await fetch(`${YOUPI_API_URL}/api/v1/payments/${encodeURIComponent(paymentId)}`, {
-      method: "GET",
-      headers: {
-        "X-Merchant-Id": YOUPI_MERCHANT_ID,
-        "X-Merchant-Key": YOUPI_MERCHANT_KEY,
-      },
-      cache: "no-store",
-    });
+    let targetSessionId = paymentIdOrOrderId;
 
-    if (!res.ok) {
-      return {
-        success: false,
-        orderStatus: "UNKNOWN",
-        isPaid: false,
-        paymentId,
-        error: "Could not verify payment session from YouPI-PG.",
-      };
+    // If given an order ID (e.g. DF-123456), look up its session ID in YouPI
+    if (targetSessionId.startsWith("DF-") || targetSessionId.startsWith("ORDER-")) {
+      const listRes = await fetch(
+        `${YOUPI_API_URL}/api/v1/admin/payments?merchantId=${YOUPI_MERCHANT_ID}`,
+        {
+          headers: { Authorization: `Bearer ${YOUPI_ADMIN_TOKEN}` },
+        }
+      );
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const found = (listData.payments || []).find(
+          (p: any) => p.orderId === targetSessionId
+        );
+        if (found) targetSessionId = found.id;
+      }
     }
 
-    const data = await res.json();
-    const status = String(data.status || "").toUpperCase();
-    const internalStatus = String(data.internalStatus || status).toUpperCase();
+    const confirmRes = await fetch(
+      `${YOUPI_API_URL}/api/v1/admin/payments/${encodeURIComponent(targetSessionId)}/confirm`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${YOUPI_ADMIN_TOKEN}`,
+        },
+        body: JSON.stringify({ notes }),
+      }
+    );
 
-    const paidStatuses = new Set([
-      "SUCCESS",
-      "OBSERVED_SUCCESS",
-      "RECONCILED",
-      "MANUAL_REVIEW",
-      "PROCESSING",
-    ]);
-
-    const isPaid =
-      paidStatuses.has(status) ||
-      paidStatuses.has(internalStatus) ||
-      (Boolean(options?.isDirectConfirmed) &&
-        status !== "CANCELLED" &&
-        status !== "FAILED" &&
-        status !== "EXPIRED");
-
-    return {
-      success: isPaid,
-      orderStatus: isPaid ? "PAID" : status || "PENDING",
-      isPaid,
-      paymentId: data.paymentId || paymentId,
-      utr: options?.utr || data.utr || undefined,
-      error: isPaid
-        ? undefined
-        : "Payment was cancelled or not completed. Your cart items are safe — please retry payment.",
-    };
-  } catch (err: unknown) {
-    console.error("YouPI-PG verification error:", err);
-    return {
-      success: false,
-      orderStatus: "ERROR",
-      isPaid: false,
-      paymentId,
-      error: err instanceof Error ? err.message : "Failed to verify YouPI-PG payment.",
-    };
-  }
-}
-
-/**
- * Verifies incoming HMAC-SHA256 webhook signature from YouPI-PG
- */
-export function verifyYoupiWebhookSignature(
-  rawBody: string,
-  signatureHeader: string | null,
-  timestampHeader?: string | null
-): boolean {
-  if (!signatureHeader || !signatureHeader.startsWith("sha256=")) {
+    return confirmRes.ok;
+  } catch (err) {
+    console.warn("[YouPI Sync] Could not sync payment confirmation with YouPI daemon:", err);
     return false;
   }
-  const actualHex = signatureHeader.slice("sha256=".length).trim();
-  const expectedRawHex = crypto
-    .createHmac("sha256", YOUPI_WEBHOOK_SECRET)
-    .update(rawBody, "utf8")
-    .digest("hex");
+}
 
-  const safeCompare = (a: string, b: string) => {
-    if (a.length !== b.length) return false;
-    try {
-      return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
-    } catch {
-      return false;
-    }
-  };
+/**
+ * Timing-safe HMAC-SHA256 signature verification for YouPI webhooks.
+ */
+export function verifyYoupiWebhook(
+  rawBody: string,
+  signatureHeader?: string | null,
+  secret = YOUPI_WEBHOOK_SECRET
+): boolean {
+  if (!signatureHeader || !secret) return false;
 
-  if (safeCompare(actualHex, expectedRawHex)) {
-    return true;
+  try {
+    const cleanSig = signatureHeader.replace(/^sha256=/, "").trim().toLowerCase();
+    const expectedSig = crypto
+      .createHmac("sha256", secret)
+      .update(rawBody, "utf8")
+      .digest("hex")
+      .toLowerCase();
+
+    if (cleanSig.length !== expectedSig.length) return false;
+    return crypto.timingSafeEqual(
+      Buffer.from(cleanSig, "hex"),
+      Buffer.from(expectedSig, "hex")
+    );
+  } catch {
+    return false;
   }
-
-  if (timestampHeader) {
-    const expectedTsHex = crypto
-      .createHmac("sha256", YOUPI_WEBHOOK_SECRET)
-      .update(`${timestampHeader}.${rawBody}`, "utf8")
-      .digest("hex");
-    if (safeCompare(actualHex, expectedTsHex)) {
-      return true;
-    }
-  }
-
-  return false;
 }

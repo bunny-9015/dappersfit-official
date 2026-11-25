@@ -36,11 +36,10 @@ export interface WatchEnquiryData {
 }
 
 /**
- * Formats rich enquiry message with Watch Picture, Brand, Model, and Price details.
- * Avoids reading window.location.origin during SSR/Client render so React hydration is 100% deterministic.
+ * Formats rich enquiry message with Watch Picture, Brand, Model, and Price details
  */
 export function formatWatchEnquiryMessage(watch: WatchEnquiryData, siteOrigin?: string): string {
-  const origin = siteOrigin || process.env.NEXT_PUBLIC_SITE_URL || "https://dappersfit.com";
+  const origin = siteOrigin || process.env.NEXT_PUBLIC_APP_URL || "";
   const formattedPrice = new Intl.NumberFormat("en-IN").format(watch.price);
 
   let fullImageUrl = "";
