@@ -38,13 +38,27 @@ export async function POST(req: NextRequest) {
         normalizedEvent === "PAYMENT.SUCCEEDED")
     ) {
       try {
+        const cleanOrderId = String(orderId).trim();
+        const existing = await prisma.order.findUnique({
+          where: { orderNumber: cleanOrderId },
+        });
+        const paidNum = Number(amount || 0);
+        const isCodAdvance =
+          existing?.paymentMethod === "cod_advance" ||
+          (existing && paidNum > 0 && paidNum < existing.totalAmount);
+        const balanceDue = existing
+          ? Math.max(0, existing.totalAmount - (paidNum || 300))
+          : 0;
+
         await prisma.order.update({
-          where: { orderNumber: String(orderId).trim() },
+          where: { orderNumber: cleanOrderId },
           data: {
-            paymentStatus: "paid",
+            paymentStatus: isCodAdvance ? "partial_paid" : "paid",
             orderStatus: "Confirmed",
-            paymentMethod: "youpi_upi",
-            notes: `YouPI Authoritative Webhook | Ref: ${ref} | Amount: ${amount || ""}`,
+            paymentMethod: isCodAdvance ? "cod_advance" : "youpi_upi",
+            notes: isCodAdvance
+              ? `COD Advance ₹${paidNum || 300} Paid via YouPI | Balance ₹${balanceDue} on delivery | Ref: ${ref}`
+              : `YouPI Authoritative Webhook | Ref: ${ref} | Amount: ${amount || ""}`,
           },
         });
       } catch (err) {

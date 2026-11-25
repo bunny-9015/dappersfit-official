@@ -12,14 +12,11 @@ export default function FloatingCartButton() {
     <button
       onClick={toggleCart}
       aria-label="View Shopping Cart"
-      className="fixed bottom-6 right-6 z-40 flex items-center gap-3 bg-black/90 hover:bg-black text-white px-4 py-3 rounded-full border border-[#D4AF37]/40 shadow-2xl backdrop-blur-md transition-all duration-300 transform hover:scale-105 active:scale-95 group cursor-pointer"
-      style={{
-        boxShadow: "0 10px 25px -5px rgba(212, 175, 55, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.4)",
-      }}
+      className="fixed bottom-5 right-5 z-40 flex items-center gap-3 bg-white hover:bg-gray-50 text-gray-900 px-4 py-2.5 rounded-full border border-gray-200 shadow-xl transition-all duration-200 transform hover:scale-105 active:scale-95 group cursor-pointer"
     >
-      <div className="relative">
+      <div className="relative flex items-center justify-center w-9 h-9 rounded-full bg-gray-900 text-[#D4AF37]">
         <svg
-          className="w-6 h-6 text-[#D4AF37] group-hover:rotate-6 transition-transform"
+          className="w-4.5 h-4.5 group-hover:scale-105 transition-transform"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -33,18 +30,18 @@ export default function FloatingCartButton() {
         </svg>
 
         {totalCount > 0 && (
-          <span className="absolute -top-2 -right-2 bg-[#D4AF37] text-black text-[11px] font-extrabold w-5 h-5 rounded-full flex items-center justify-center animate-pulse">
+          <span className="absolute -top-1.5 -right-1.5 bg-[#996515] text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center ring-2 ring-white">
             {totalCount}
           </span>
         )}
       </div>
 
-      <div className="flex flex-col text-left pr-1">
-        <span className="text-[10px] tracking-widest uppercase font-bold text-[#D4AF37]">
-          {totalCount === 0 ? "Cart" : `${totalCount} Item${totalCount > 1 ? "s" : ""}`}
+      <div className="flex flex-col text-left pr-1.5">
+        <span className="text-[10px] tracking-widest uppercase font-bold text-[#996515]">
+          {totalCount === 0 ? "Your Bag" : `${totalCount} Item${totalCount > 1 ? "s" : ""}`}
         </span>
-        <span className="text-xs font-bold text-gray-100">
-          {totalCount === 0 ? "View Bag" : `₹${finalTotal.toLocaleString("en-IN")}`}
+        <span className="text-xs font-bold text-gray-900">
+          {totalCount === 0 ? "Open Cart" : `₹${finalTotal.toLocaleString("en-IN")}`}
         </span>
       </div>
     </button>

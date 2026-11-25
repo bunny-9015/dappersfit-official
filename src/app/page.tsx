@@ -48,41 +48,55 @@ export default async function Home({
 
         {/* Center Headline */}
         <div className="relative z-10 max-w-4xl mx-auto px-4">
-          <span className="inline-block text-xs sm:text-sm uppercase tracking-[0.35em] text-[#D4AF37] font-display font-semibold mb-4 px-4 py-1.5 rounded-full border border-[#D4AF37]/30 bg-black/50 backdrop-blur-sm">
+          <span className="inline-block text-xs sm:text-sm uppercase tracking-[0.35em] text-[#D4AF37] font-display font-semibold mb-4 px-4 py-1.5 rounded-full border border-[#D4AF37]/35 bg-black/50 backdrop-blur-sm">
             Horological Excellence
           </span>
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-serif font-bold tracking-tight text-white leading-tight drop-shadow-2xl">
             Time, <span className="italic font-light text-gray-200">Redefined.</span>
           </h1>
-          <p className="mt-4 text-gray-300 text-sm sm:text-lg max-w-2xl mx-auto font-sans font-light leading-relaxed drop-shadow">
+          <p className="mt-4 text-gray-200 text-sm sm:text-lg max-w-2xl mx-auto font-sans font-light leading-relaxed drop-shadow">
             Precision crafted luxury timepieces made for those who value time and distinction.
           </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="#explore-by-brand"
+              className="px-7 py-3.5 bg-white text-gray-900 hover:bg-gray-100 font-brand font-bold text-xs uppercase tracking-widest rounded-full shadow-xl transition active:scale-95"
+            >
+              Explore Collection
+            </a>
+            <a
+              href="/request-watch"
+              className="px-7 py-3.5 bg-white/10 hover:bg-white/20 text-white border border-white/30 backdrop-blur-md font-brand font-semibold text-xs uppercase tracking-widest rounded-full transition active:scale-95"
+            >
+              Source a Rare Model
+            </a>
+          </div>
         </div>
       </section>
 
       {/* 2. Trust Builders Bar */}
-      <section className="bg-gray-50 border-y border-gray-200 py-8">
+      <section className="bg-white border-b border-gray-200 py-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-6 md:grid-cols-4 text-center text-gray-700 font-brand text-xs tracking-widest uppercase">
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="text-[#996515] text-lg font-bold">✓</span>
-              <span className="text-gray-900 font-bold tracking-wider">100% Verified Quality</span>
-              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">rigorous inspection</span>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="flex flex-col items-center text-center gap-1.5 p-4 rounded-2xl bg-gray-50/80 border border-gray-100">
+              <span className="w-8 h-8 rounded-full bg-amber-50 text-[#996515] border border-amber-200/70 flex items-center justify-center text-sm font-bold">✓</span>
+              <span className="text-gray-900 font-brand font-bold text-xs tracking-wider uppercase">100% Verified Quality</span>
+              <span className="text-[11px] text-gray-500 font-sans">Multi-point QC inspection</span>
             </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="text-[#996515] text-lg font-bold">✓</span>
-              <span className="text-gray-900 font-bold tracking-wider">Pan-India Express</span>
-              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">doorstep delivery</span>
+            <div className="flex flex-col items-center text-center gap-1.5 p-4 rounded-2xl bg-gray-50/80 border border-gray-100">
+              <span className="w-8 h-8 rounded-full bg-amber-50 text-[#996515] border border-amber-200/70 flex items-center justify-center text-sm font-bold">⚡</span>
+              <span className="text-gray-900 font-brand font-bold text-xs tracking-wider uppercase">Instant UPI &amp; ₹300 COD</span>
+              <span className="text-[11px] text-gray-500 font-sans">Auto-verified secure checkout</span>
             </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="text-[#996515] text-lg font-bold">✓</span>
-              <span className="text-gray-900 font-bold tracking-wider">WhatsApp Checkout</span>
-              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">instant order support</span>
+            <div className="flex flex-col items-center text-center gap-1.5 p-4 rounded-2xl bg-gray-50/80 border border-gray-100">
+              <span className="w-8 h-8 rounded-full bg-amber-50 text-[#996515] border border-amber-200/70 flex items-center justify-center text-sm font-bold">✈</span>
+              <span className="text-gray-900 font-brand font-bold text-xs tracking-wider uppercase">Pan-India Express</span>
+              <span className="text-[11px] text-gray-500 font-sans">Insured doorstep delivery</span>
             </div>
-            <div className="flex flex-col items-center gap-1.5">
-              <span className="text-[#996515] text-lg font-bold">✓</span>
-              <span className="text-gray-900 font-bold tracking-wider">Best Price Promise</span>
-              <span className="text-[10px] text-gray-500 font-sans normal-case tracking-normal">unmatched value</span>
+            <div className="flex flex-col items-center text-center gap-1.5 p-4 rounded-2xl bg-gray-50/80 border border-gray-100">
+              <span className="w-8 h-8 rounded-full bg-amber-50 text-[#996515] border border-amber-200/70 flex items-center justify-center text-sm font-bold">★</span>
+              <span className="text-gray-900 font-brand font-bold text-xs tracking-wider uppercase">Personal Concierge</span>
+              <span className="text-[11px] text-gray-500 font-sans">Direct WhatsApp support</span>
             </div>
           </div>
         </div>

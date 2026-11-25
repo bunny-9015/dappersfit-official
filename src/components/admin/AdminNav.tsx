@@ -82,8 +82,17 @@ export default function AdminNav() {
             })}
           </nav>
 
-          {/* Right Action: Storefront link */}
-          <div className="flex items-center">
+          {/* Right Action: YouPI Gateway Sync & Storefront link */}
+          <div className="flex items-center gap-2">
+            <a
+              href="https://pay-admin.dappersfit.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>UPI Gateway</span>
+            </a>
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30 transition"
