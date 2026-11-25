@@ -29,6 +29,7 @@ export interface CreateYoupiSessionParams {
   customerPhone?: string;
   customerEmail?: string;
   returnUrl?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface YoupiSessionResponse {
@@ -69,7 +70,7 @@ export function buildUpiUri(params: {
 export async function createYoupiSession(
   params: CreateYoupiSessionParams
 ): Promise<YoupiSessionResponse> {
-  const { orderId, amount, customerName, customerPhone, customerEmail, returnUrl } = params;
+  const { orderId, amount, customerName, customerPhone, customerEmail, returnUrl, metadata } = params;
   const upiUri = buildUpiUri({
     vpa: YOUPI_VPA,
     payeeName: YOUPI_PAYEE_NAME,
@@ -93,6 +94,7 @@ export async function createYoupiSession(
       customerPhone: cleanPhone,
       customerEmail: customerEmail || undefined,
       returnUrl: returnUrl || `${process.env.NEXT_PUBLIC_SITE_URL || "https://www.dappersfit.com"}/cart?order_id=${orderId}`,
+      metadata: metadata || undefined,
     };
 
     const res = await fetch(`${YOUPI_API_URL}/api/v1/payments`, {

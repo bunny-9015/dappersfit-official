@@ -206,6 +206,23 @@ export default function CartPage() {
           customerName: formData.fullName,
           customerPhone: formData.phone,
           customerEmail: formData.email,
+          metadata: {
+            items: items.map((it) => ({
+              name: it.name,
+              brand: it.brand || "Luxury",
+              qty: it.quantity,
+              price: it.price,
+            })),
+            includeOgRolexBox: includeOgRolexBox && hasRolexInCart,
+            customerName: formData.fullName,
+            customerPhone: formData.phone,
+            shippingAddress: [formData.address, formData.city, formData.state, formData.pincode]
+              .filter(Boolean)
+              .join(", "),
+            paymentMode: isCod ? "COD_ADVANCE" : "UPI_FULL",
+            orderTotal: finalTotal,
+            codBalanceDue: balanceDue,
+          },
         }),
       });
       const youpiData = await youpiRes.json();

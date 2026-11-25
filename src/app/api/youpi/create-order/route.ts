@@ -4,7 +4,7 @@ import { createYoupiSession, YOUPI_VPA, YOUPI_PAYEE_NAME } from "@/lib/youpi";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderId, amount, customerName, customerPhone, customerEmail } = body || {};
+    const { orderId, amount, customerName, customerPhone, customerEmail, metadata } = body || {};
 
     if (!amount || typeof amount !== "number" || amount <= 0) {
       return NextResponse.json(
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       customerPhone,
       customerEmail,
       returnUrl,
+      metadata: metadata && typeof metadata === "object" ? metadata : undefined,
     });
 
     return NextResponse.json({
