@@ -3,6 +3,7 @@
 import React, { useState, useTransition } from "react";
 import Image from "next/image";
 import { updateOrderStatus, deleteOrder } from "@/app/actions";
+import { downloadOrPrintInvoice } from "@/lib/invoice";
 
 export interface OrderItemData {
   id: string;
@@ -578,13 +579,40 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
               </div>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => window.print()}
-                  className="bg-[#D4AF37] hover:bg-[#b8952f] text-black font-bold text-xs px-4 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition"
+                  onClick={() =>
+                    downloadOrPrintInvoice({
+                      orderNumber: selectedOrderForInvoice.orderNumber,
+                      createdAt: selectedOrderForInvoice.createdAt,
+                      customerName: selectedOrderForInvoice.customerName,
+                      customerPhone: selectedOrderForInvoice.customerPhone,
+                      customerEmail: selectedOrderForInvoice.customerEmail,
+                      shippingAddress: selectedOrderForInvoice.shippingAddress,
+                      city: selectedOrderForInvoice.city,
+                      state: selectedOrderForInvoice.state,
+                      pincode: selectedOrderForInvoice.pincode,
+                      paymentMethod: selectedOrderForInvoice.paymentMethod,
+                      paymentStatus: selectedOrderForInvoice.paymentStatus,
+                      orderStatus: selectedOrderForInvoice.orderStatus,
+                      shippingMethod: selectedOrderForInvoice.shippingMethod,
+                      subtotal: selectedOrderForInvoice.subtotal,
+                      discountAmount: selectedOrderForInvoice.discountAmount,
+                      promoCode: selectedOrderForInvoice.promoCode,
+                      shippingCost: selectedOrderForInvoice.shippingCost,
+                      totalAmount: selectedOrderForInvoice.totalAmount,
+                      items: selectedOrderForInvoice.items.map((it) => ({
+                        name: it.productName,
+                        brand: it.brand,
+                        quantity: it.quantity,
+                        price: it.price,
+                      })),
+                    })
+                  }
+                  className="bg-[#D4AF37] hover:bg-[#b8952f] text-black font-bold text-xs px-4 py-1.5 rounded-lg flex items-center gap-1.5 shadow transition cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  <span>Print Document</span>
+                  <span>Print / Download PDF</span>
                 </button>
                 <button
                   onClick={() => setSelectedOrderForInvoice(null)}
@@ -595,8 +623,16 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
               </div>
             </div>
 
-            {/* Print Sheet Content */}
-            <div className="p-8 sm:p-10 space-y-6 text-gray-900 font-sans print:p-6" id="printable-invoice">
+            {/* Print Sheet Content with Large Centered Transparent Watermark */}
+            <div className="relative p-8 sm:p-10 space-y-6 text-gray-900 font-sans print:p-6 overflow-hidden" id="printable-invoice">
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+                <img
+                  src="/invoice-watermark.png"
+                  alt=""
+                  className="w-[420px] max-w-[78%] h-auto opacity-[0.09] object-contain select-none"
+                />
+              </div>
+              <div className="relative z-10 space-y-6">
               {/* Document Header */}
               <div className="border-b-2 border-black pb-6 flex justify-between items-start">
                 <div>
@@ -604,11 +640,10 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
                     DAPPERSFIT
                   </h1>
                   <p className="text-xs uppercase tracking-widest text-gray-500 font-semibold mt-0.5">
-                    Haute Horology & Luxury Timepieces
+                    Haute Horology &amp; Luxury Timepieces
                   </p>
                   <p className="text-xs text-gray-600 mt-2">
-                    Mumbai & Bangalore Luxury Sourcing Concierge<br />
-                    Web: https://dappersfit.in | WhatsApp: +91 98765 43210
+                    Web: https://www.dappersfit.com | WhatsApp: +91 93639 03915
                   </p>
                 </div>
                 <div className="text-right">
@@ -746,8 +781,9 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
 
               {/* Footer Note */}
               <div className="border-t border-gray-200 pt-4 text-center text-[10px] text-gray-500">
-                <p>Thank you for choosing DappersFit. For queries, contact concierge@dappersfit.in or WhatsApp +91 98765 43210.</p>
+                <p>Thank you for choosing DappersFit. For queries, contact WhatsApp +91 93639 03915 or https://www.dappersfit.com.</p>
                 <p className="mt-0.5">Please record an unboxing video upon courier delivery for warranty validation.</p>
+              </div>
               </div>
             </div>
           </div>

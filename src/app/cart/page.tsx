@@ -7,6 +7,7 @@ import { createOrder, getUserSession } from "@/app/actions";
 import PriceTag from "@/components/PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
+import { downloadOrPrintInvoice, InvoicePayload } from "@/lib/invoice";
 
 const COD_ADVANCE_AMOUNT = 300;
 
@@ -51,6 +52,7 @@ export default function CartPage() {
     paidNow: number;
     balanceDue: number;
     method: "upi" | "cod";
+    invoice: InvoicePayload;
   } | null>(null);
 
   const [showYoupiModal, setShowYoupiModal] = useState(false);
@@ -235,6 +237,36 @@ export default function CartPage() {
         paidNow: chargeAmount,
         balanceDue,
         method: formData.paymentMethod,
+        invoice: {
+          orderNumber: newId,
+          createdAt: new Date().toISOString(),
+          customerName: formData.fullName,
+          customerPhone: formData.phone,
+          customerEmail: formData.email || null,
+          shippingAddress: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          paymentMethod: isCod ? "cod_advance" : "youpi_upi",
+          paymentStatus: isCod ? "partial_paid" : "paid",
+          orderStatus: "Confirmed",
+          shippingMethod,
+          subtotal,
+          discountAmount,
+          promoCode: appliedPromo?.code || null,
+          shippingCost,
+          totalAmount: finalTotal,
+          paidNow: chargeAmount,
+          balanceDue,
+          includeOgRolexBox: includeOgRolexBox && hasRolexInCart,
+          rolexBoxPrice,
+          items: items.map((it) => ({
+            name: it.name,
+            brand: it.brand || "DappersFit",
+            quantity: it.quantity,
+            price: it.price,
+          })),
+        },
       });
 
       const win = typeof window !== "undefined" ? (window as any) : null;
@@ -355,7 +387,16 @@ export default function CartPage() {
                 </div>
               )}
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <div className="flex flex-col sm:flex-row gap-3 justify-center flex-wrap">
+              {confirmedSummary?.invoice && (
+                <button
+                  type="button"
+                  onClick={() => downloadOrPrintInvoice(confirmedSummary.invoice)}
+                  className="px-6 py-3 bg-gray-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-md cursor-pointer"
+                >
+                  📄 Download / Print Invoice (PDF)
+                </button>
+              )}
               <a
                 href={getWhatsAppChatUrl(formatWhatsAppMessage(orderId, paymentId))}
                 target="_blank"
@@ -366,7 +407,7 @@ export default function CartPage() {
               </a>
               <Link
                 href="/"
-                className="px-6 py-3 bg-gray-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded-xl transition"
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold text-xs uppercase tracking-wider rounded-xl transition"
               >
                 Back to Store
               </Link>

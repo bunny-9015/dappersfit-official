@@ -6,6 +6,7 @@ import { createOrder } from "@/app/actions";
 import PriceTag from "./PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
+import { downloadOrPrintInvoice, InvoicePayload } from "@/lib/invoice";
 
 const COD_ADVANCE_AMOUNT = 300;
 
@@ -73,6 +74,7 @@ export default function CartDrawer() {
     paidNow: number;
     balanceDue: number;
     method: "upi" | "cod";
+    invoice: InvoicePayload;
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
@@ -264,6 +266,35 @@ export default function CartDrawer() {
         paidNow: chargeAmount,
         balanceDue,
         method: formData.paymentMethod,
+        invoice: {
+          orderNumber: newId,
+          createdAt: new Date().toISOString(),
+          customerName: formData.fullName,
+          customerPhone: formData.phone,
+          shippingAddress: formData.address,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          paymentMethod: isCod ? "cod_advance" : "youpi_upi",
+          paymentStatus: isCod ? "partial_paid" : "paid",
+          orderStatus: "Confirmed",
+          shippingMethod,
+          subtotal,
+          discountAmount,
+          promoCode: appliedPromo?.code || null,
+          shippingCost,
+          totalAmount: finalTotal,
+          paidNow: chargeAmount,
+          balanceDue,
+          includeOgRolexBox: includeOgRolexBox && hasRolexInCart,
+          rolexBoxPrice,
+          items: items.map((it) => ({
+            name: it.name,
+            brand: it.brand || "DappersFit",
+            quantity: it.quantity,
+            price: it.price,
+          })),
+        },
       });
 
       const win = typeof window !== "undefined" ? (window as any) : null;
@@ -975,24 +1006,35 @@ export default function CartDrawer() {
                     )}
                   </div>
 
-                  <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => window.open(getWhatsAppChatUrl(generateWhatsAppMessage(orderId)), "_blank")}
-                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
-                    >
-                      Share Receipt on WhatsApp
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep("cart");
-                        setIsOpen(false);
-                      }}
-                      className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold text-xs rounded-xl transition cursor-pointer"
-                    >
-                      Continue Shopping
-                    </button>
+                  <div className="space-y-2.5 pt-1">
+                    {confirmedSummary?.invoice && (
+                      <button
+                        type="button"
+                        onClick={() => downloadOrPrintInvoice(confirmedSummary.invoice)}
+                        className="w-full py-3.5 bg-gray-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded-xl transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <span>📄 Download / Print Invoice (PDF)</span>
+                      </button>
+                    )}
+                    <div className="flex flex-col sm:flex-row gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => window.open(getWhatsAppChatUrl(generateWhatsAppMessage(orderId)), "_blank")}
+                        className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
+                      >
+                        Share Receipt on WhatsApp
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep("cart");
+                          setIsOpen(false);
+                        }}
+                        className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold text-xs rounded-xl transition cursor-pointer"
+                      >
+                        Continue Shopping
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
