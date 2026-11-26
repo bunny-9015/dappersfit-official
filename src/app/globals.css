@@ -35,13 +35,25 @@
 html {
   scroll-behavior: smooth;
   text-rendering: optimizeLegibility;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 body {
   @apply antialiased;
-  overflow-x: hidden;
+  max-width: 100%;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* GPU Hardware Acceleration & Frame Rate Booster */

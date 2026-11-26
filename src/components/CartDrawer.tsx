@@ -375,7 +375,7 @@ export default function CartDrawer() {
           />
 
           {/* Centered White Popup Card */}
-          <div className="relative z-10 w-full sm:max-w-2xl bg-white text-gray-900 rounded-t-3xl sm:rounded-3xl border border-gray-200 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+          <div className="relative z-10 w-full sm:max-w-2xl bg-white text-gray-900 rounded-t-3xl sm:rounded-3xl border border-gray-200 shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden">
             {/* Header */}
             <div className="px-5 sm:px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -438,7 +438,7 @@ export default function CartDrawer() {
             )}
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 bg-white">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5 bg-white">
               {/* EMPTY STATE */}
               {step === "cart" && items.length === 0 && (
                 <div className="text-center py-14 space-y-4">

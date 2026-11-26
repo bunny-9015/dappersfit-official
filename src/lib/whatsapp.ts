@@ -3,8 +3,8 @@
  * Supports automatic app opening on Mobile (iOS/Android) and WhatsApp Web / Desktop on PC/Mac.
  */
 
-export const DEFAULT_WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "917550148991";
-export const DEFAULT_WHATSAPP_DISPLAY = "+91 75501 48991";
+export const DEFAULT_WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "919363903915";
+export const DEFAULT_WHATSAPP_DISPLAY = "+91 93639 03915";
 
 /**
  * Sanitizes phone number by removing spaces, +, dashes, brackets.

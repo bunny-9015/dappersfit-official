@@ -161,6 +161,15 @@ export default async function RootLayout({
                   <NavbarCartButton />
                 </div>
               </div>
+              {/* Mobile Quick Navigation Strip */}
+              <div className="sm:hidden flex items-center gap-4 overflow-x-auto py-2 border-t border-gray-100 text-[11px] font-brand font-semibold uppercase tracking-wider text-gray-600 no-scrollbar">
+                <Link href="/" className="whitespace-nowrap hover:text-black">Home</Link>
+                <Link href="/#explore-by-brand" className="whitespace-nowrap hover:text-black">Watches</Link>
+                <Link href="/#reviews" className="whitespace-nowrap hover:text-black">Reviews</Link>
+                <Link href="/cart" className="whitespace-nowrap hover:text-black">Cart</Link>
+                <Link href="/about" className="whitespace-nowrap hover:text-black">About</Link>
+                <Link href="/request-watch" className="whitespace-nowrap text-[#996515]">Request Watch</Link>
+              </div>
             </div>
           </nav>
 
@@ -219,7 +228,7 @@ export default async function RootLayout({
                       rel="noopener noreferrer"
                       className="text-gray-400 hover:text-emerald-400 flex items-center gap-1.5 transition"
                     >
-                      <span>WhatsApp: +91 75501 48991</span>
+                      <span>WhatsApp: +91 93639 03915</span>
                     </a>
                   </li>
                   <li>
