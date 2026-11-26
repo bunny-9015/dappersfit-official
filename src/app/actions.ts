@@ -206,15 +206,50 @@ export async function deleteOrder(orderId: string) {
 
 // ----------------- AUTHENTICATION ACTIONS -----------------
 
+const FALLBACK_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "dappersfit@gmail.com").trim().toLowerCase();
+// scrypt hash of initial admin password (overrideable via ADMIN_PASSWORD env var)
+const FALLBACK_ADMIN_HASH =
+  process.env.ADMIN_PASSWORD_HASH ||
+  hashPassword(process.env.ADMIN_PASSWORD || "Jail@1974");
+
 export async function loginUser(data: { email: string; password: string }) {
   try {
     const email = data.email.trim().toLowerCase();
+
+    // Master Admin check (works even if SQLite is unavailable/read-only on serverless)
+    if (email === FALLBACK_ADMIN_EMAIL && verifyPassword(data.password, FALLBACK_ADMIN_HASH)) {
+      const adminUser = {
+        userId: "dappersfit-master-admin",
+        email: FALLBACK_ADMIN_EMAIL,
+        name: "DappersFit Admin",
+        role: "ADMIN" as const,
+      };
+      await setSession(adminUser);
+      revalidatePath("/");
+      revalidatePath("/admin/orders");
+      revalidatePath("/account");
+      return {
+        success: true,
+        user: {
+          id: adminUser.userId,
+          name: adminUser.name,
+          email: adminUser.email,
+          role: adminUser.role,
+        },
+      };
+    }
+
     const user = await prisma.user.findUnique({
       where: { email },
     });
 
     if (!user) {
       return { success: false, error: "No account found with this email." };
+    }
+
+    // Only the configured master admin email may hold ADMIN role
+    if (user.role === "ADMIN" && email !== FALLBACK_ADMIN_EMAIL) {
+      return { success: false, error: "This administrator account has been disabled." };
     }
 
     const isValid = verifyPassword(data.password, user.passwordHash);
@@ -336,7 +371,7 @@ export async function registerUser(data: {
     }
 
     // Registration strictly creates CUSTOMER accounts.
-    // The system permits exactly 1 master admin account (admindappersfit@gmail.com).
+    // The system permits exactly 1 master admin account (dappersfit@gmail.com).
     if (data.accountType === "ADMIN") {
       return {
         success: false,
