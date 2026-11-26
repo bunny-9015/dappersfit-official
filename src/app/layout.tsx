@@ -74,18 +74,36 @@ export default async function RootLayout({
       </head>
       <body className="font-sans bg-gray-50 flex flex-col min-h-screen text-gray-900 antialiased">
         <CartProvider>
-          {/* Top Instagram & New Arrivals Announcement Bar */}
+          {/* Top Moving Luxury Marquee Announcement Bar */}
           <a
             href="https://www.instagram.com/dappers_fit_?utm_source=ig_web_button_share_sheet&rpxt=ZDNlZDc0MzIxNw=="
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-neutral-950 text-white border-b border-white/10 py-2 px-4 text-center block text-[11px] font-brand tracking-widest uppercase hover:bg-neutral-900 transition group"
+            className="bg-neutral-950 text-white border-b border-white/10 py-2 block overflow-hidden text-[11px] font-brand tracking-widest uppercase hover:bg-neutral-900 transition"
           >
-            <span className="text-[#D4AF37] mr-1.5">★</span>
-            <span className="hidden sm:inline">Explore Daily New Arrivals & Unboxing Videos on Instagram: </span>
-            <span className="sm:hidden">New Arrivals on Instagram: </span>
-            <span className="font-bold text-[#D4AF37] underline underline-offset-2 ml-1">@dappers_fit_</span>
-            <span className="inline-block transform group-hover:translate-x-1 transition-transform ml-1.5 text-pink-400">→</span>
+            <div className="animate-marquee">
+              {[0, 1].map((dup) => (
+                <div key={dup} className="flex items-center gap-10 pr-10 whitespace-nowrap">
+                  <span>
+                    <span className="text-[#D4AF37] mr-1.5">★</span>
+                    <strong className="text-[#D4AF37]">SALE IS LIVE</strong> — Luxury Timepieces at Unmatched Value
+                  </span>
+                  <span>
+                    <span className="text-[#D4AF37] mr-1.5">⌚</span>
+                    Get Branded Watches from <strong className="text-[#D4AF37]">DappersFit</strong> Now!
+                  </span>
+                  <span>
+                    <span className="text-emerald-400 mr-1.5">⚡</span>
+                    Instant UPI &amp; ₹300 COD Advance Available Pan-India
+                  </span>
+                  <span>
+                    <span className="text-pink-400 mr-1.5">★</span>
+                    Daily New Arrivals &amp; Unboxing on Instagram:{" "}
+                    <span className="font-bold text-[#D4AF37] underline underline-offset-2">@dappers_fit_</span> →
+                  </span>
+                </div>
+              ))}
+            </div>
           </a>
 
           {/* Navigation */}

@@ -25,6 +25,7 @@ export interface CategoryData {
   id: string;
   name: string;
   slug: string;
+  imageUrl?: string | null;
 }
 
 interface CatalogSectionProps {
@@ -50,10 +51,10 @@ export default function CatalogSection({
   const [visibleCount, setVisibleCount] = useState<number>(24);
   const loadMoreRef = React.useRef<HTMLDivElement | null>(null);
 
-  // Derive full brand categories with representative photos for brand slider
+  // Derive full brand categories with representative photos (respecting custom admin thumbnails)
   const brandCategories = useMemo(() => {
-    return deriveBrandCategories(products);
-  }, [products]);
+    return deriveBrandCategories(products, categories);
+  }, [products, categories]);
 
   // Handle brand selection from brand slider: clicking opens catalog, clicking same brand toggles closed
   const handleBrandSelect = (brandName: string, shouldScroll = true) => {

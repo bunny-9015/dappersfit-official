@@ -25,9 +25,19 @@ export function formatBrandDisplayName(brand: string): string {
  * directly from the product catalogue without hardcoded lists.
  */
 export function deriveBrandCategories(
-  products: { id: string; name: string; brand: string; imageUrl: string | null }[]
+  products: { id: string; name: string; brand: string; imageUrl: string | null }[],
+  categories?: { id?: string; name: string; imageUrl?: string | null }[]
 ): BrandCategory[] {
   const brandMap = new Map<string, { count: number; imageUrl: string }>();
+  const customThumbMap = new Map<string, string>();
+
+  if (Array.isArray(categories)) {
+    for (const c of categories) {
+      if (c?.name && c?.imageUrl) {
+        customThumbMap.set(c.name.trim().toLowerCase(), c.imageUrl);
+      }
+    }
+  }
 
   for (const p of products) {
     if (!p.brand) continue;
@@ -83,10 +93,11 @@ export function deriveBrandCategories(
 
   return brandKeys.map((name) => {
     const info = brandMap.get(name)!;
+    const customThumb = customThumbMap.get(name.toLowerCase());
     return {
       name,
       displayName: formatBrandDisplayName(name),
-      imageUrl: info.imageUrl,
+      imageUrl: customThumb || info.imageUrl,
       count: info.count,
     };
   });

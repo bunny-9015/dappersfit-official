@@ -56,6 +56,26 @@ body {
   scrollbar-width: none;
 }
 
+@keyframes dappersfit-marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: dappersfit-marquee 26s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
 /* GPU Hardware Acceleration & Frame Rate Booster */
 .gpu-layer {
   transform: translate3d(0, 0, 0);

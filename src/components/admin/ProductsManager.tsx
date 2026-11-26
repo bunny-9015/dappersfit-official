@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
-import { saveProduct, deleteProduct, toggleProductStock } from "@/app/actions";
+import { saveProduct, deleteProduct, toggleProductStock, saveCategory } from "@/app/actions";
 
 export interface AdminCategoryItem {
   id: string;
   name: string;
   slug: string;
+  imageUrl?: string | null;
 }
 
 export interface AdminProductItem {
@@ -81,6 +82,13 @@ export default function ProductsManager({
 }: ProductsManagerProps) {
   const [products, setProducts] = useState<AdminProductItem[]>(initialProducts);
   const [categories, setCategories] = useState<AdminCategoryItem[]>(initialCategories);
+  const [activeTab, setActiveTab] = useState<"watches" | "catalogs">("watches");
+  const [visibleLimit, setVisibleLimit] = useState<number>(40);
+  const [catForm, setCatForm] = useState<{ id: string; name: string; imageUrl: string }>({
+    id: "",
+    name: "",
+    imageUrl: "",
+  });
   const [form, setForm] = useState(emptyForm);
   const [urlInput, setUrlInput] = useState("");
   const [search, setSearch] = useState("");
@@ -231,8 +239,215 @@ export default function ProductsManager({
     });
   };
 
+  const handleCategoryThumbUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const compressed = await compressImageToDataUrl(file, 800, 0.82);
+      setCatForm((prev) => ({ ...prev, imageUrl: compressed }));
+    } catch {
+      setFeedback({ type: "error", text: "Could not compress thumbnail image." });
+    } finally {
+      setIsUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleSaveCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFeedback(null);
+    startTransition(async () => {
+      const res = await saveCategory({
+        id: catForm.id || undefined,
+        name: catForm.name,
+        imageUrl: catForm.imageUrl || null,
+      });
+      if (!res.success || !res.category) {
+        setFeedback({ type: "error", text: res.error || "Could not save catalog." });
+        return;
+      }
+      const saved = res.category as AdminCategoryItem;
+      setCategories((prev) => {
+        const exists = prev.some((c) => c.id === saved.id);
+        const next = exists ? prev.map((c) => (c.id === saved.id ? saved : c)) : [...prev, saved];
+        return next.sort((a, b) => a.name.localeCompare(b.name));
+      });
+      setFeedback({
+        type: "success",
+        text: catForm.id ? `Updated catalog "${saved.name}"!` : `Created catalog "${saved.name}"!`,
+      });
+      setCatForm({ id: "", name: "", imageUrl: "" });
+    });
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="space-y-5">
+      {/* Sub-Tabs: Watches vs Brand Catalogs & Thumbnails */}
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-3">
+        <button
+          type="button"
+          onClick={() => { setActiveTab("watches"); setFeedback(null); }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === "watches"
+              ? "bg-gray-900 text-white shadow-xs"
+              : "bg-white text-gray-600 border border-gray-200 hover:text-gray-900"
+          }`}
+        >
+          ⌚ Watches Inventory ({products.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab("catalogs"); setFeedback(null); }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === "catalogs"
+              ? "bg-gray-900 text-white shadow-xs"
+              : "bg-white text-gray-600 border border-gray-200 hover:text-gray-900"
+          }`}
+        >
+          🏷️ Brand Catalogs &amp; Thumbnails ({categories.length})
+        </button>
+      </div>
+
+      {/* TAB 2: BRAND CATALOGS & THUMBNAILS */}
+      {activeTab === "catalogs" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5 bg-white rounded-2xl border border-gray-200 shadow-xs p-5 sm:p-6">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-serif font-bold text-gray-900">
+                  {catForm.id ? "Edit Brand Catalog" : "Add Brand Catalog"}
+                </h2>
+                <p className="text-xs text-gray-500">
+                  Set custom thumbnails for Rolex, Diesel, Omega, etc.
+                </p>
+              </div>
+              {catForm.id && (
+                <button
+                  type="button"
+                  onClick={() => setCatForm({ id: "", name: "", imageUrl: "" })}
+                  className="text-xs font-semibold text-gray-500 hover:text-gray-900 px-2.5 py-1 rounded-lg bg-gray-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+
+            {feedback && (
+              <div
+                className={`mb-4 p-3 rounded-xl text-xs font-semibold border ${
+                  feedback.type === "success"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}
+              >
+                {feedback.text}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveCategory} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Brand / Catalog Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={catForm.name}
+                  onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+                  placeholder="e.g. Rolex, Diesel, Omega"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-gray-900 px-3 py-2 text-xs focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-2 p-3.5 rounded-2xl bg-gray-50 border border-gray-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-gray-800">Catalog Thumbnail</label>
+                  <label className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-[11px] font-bold cursor-pointer">
+                    {isUploading ? "Compressing..." : "+ Upload Thumbnail"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCategoryThumbUpload}
+                      className="hidden"
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  value={catForm.imageUrl}
+                  onChange={(e) => setCatForm({ ...catForm, imageUrl: e.target.value })}
+                  placeholder="Or paste thumbnail URL (https://... or /watches/...)"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:border-gray-900"
+                />
+                {catForm.imageUrl && (
+                  <div className="relative w-28 h-28 rounded-xl bg-white border border-gray-200 p-1.5 flex items-center justify-center">
+                    <img src={catForm.imageUrl} alt="Thumbnail preview" className="w-full h-full object-contain" />
+                    <button
+                      type="button"
+                      onClick={() => setCatForm({ ...catForm, imageUrl: "" })}
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isPending || isUploading}
+                className="w-full py-3 bg-gray-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer disabled:opacity-50"
+              >
+                {isPending ? "Saving..." : catForm.id ? "Save Catalog Thumbnail" : "Create Brand Catalog"}
+              </button>
+            </form>
+          </div>
+
+          <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-gray-200">
+              <h2 className="text-base font-serif font-bold text-gray-900">
+                All Brand Catalogs ({categories.length})
+              </h2>
+              <p className="text-[11px] text-gray-500">
+                Click Edit on any brand (Rolex, Diesel, Omega...) to set its storefront card thumbnail.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 max-h-[640px] overflow-y-auto">
+              {categories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="p-3 rounded-2xl border border-gray-200 bg-gray-50/70 hover:border-gray-300 flex flex-col items-center text-center gap-2"
+                >
+                  <div className="w-16 h-16 rounded-xl bg-white border border-gray-200 flex items-center justify-center p-1 overflow-hidden">
+                    {cat.imageUrl ? (
+                      <img src={cat.imageUrl} alt={cat.name} loading="lazy" className="w-full h-full object-contain" />
+                    ) : (
+                      <span className="text-[10px] text-gray-400">Auto</span>
+                    )}
+                  </div>
+                  <p className="text-xs font-bold text-gray-900 truncate w-full">{cat.name}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCatForm({ id: cat.id, name: cat.name, imageUrl: cat.imageUrl || "" });
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    className="w-full py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-900 hover:text-white text-[11px] font-semibold text-gray-800 transition cursor-pointer"
+                  >
+                    Edit Thumbnail
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 1: WATCHES INVENTORY */}
+      {activeTab === "watches" && (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
       {/* LEFT: Add / Edit Watch Form */}
       <div className="lg:col-span-5 bg-white rounded-2xl border border-gray-200 shadow-xs p-5 sm:p-6">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
@@ -507,7 +722,7 @@ export default function ProductsManager({
           {filteredProducts.length === 0 && (
             <li className="p-8 text-center text-xs text-gray-500">No matching watches found.</li>
           )}
-          {filteredProducts.map((product) => {
+          {filteredProducts.slice(0, visibleLimit).map((product) => {
             const photoCount = Array.from(
               new Set([product.imageUrl, ...(product.images || [])].filter(Boolean))
             ).length;
@@ -519,7 +734,7 @@ export default function ProductsManager({
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-14 h-14 rounded-xl bg-gray-50 border border-gray-200 shrink-0 flex items-center justify-center p-1 overflow-hidden">
                     {product.imageUrl ? (
-                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
+                      <img src={product.imageUrl} alt={product.name} loading="lazy" className="w-full h-full object-contain" />
                     ) : (
                       <span className="text-[9px] text-gray-400">No img</span>
                     )}
@@ -570,8 +785,21 @@ export default function ProductsManager({
               </li>
             );
           })}
+          {filteredProducts.length > visibleLimit && (
+            <li className="p-4 text-center">
+              <button
+                type="button"
+                onClick={() => setVisibleLimit((v) => v + 60)}
+                className="px-5 py-2 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold cursor-pointer"
+              >
+                Load More ({filteredProducts.length - visibleLimit} remaining)
+              </button>
+            </li>
+          )}
         </ul>
       </div>
+      </div>
+      )}
     </div>
   );
 }

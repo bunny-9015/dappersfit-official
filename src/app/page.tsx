@@ -120,6 +120,7 @@ export default async function Home({
           id: c.id,
           name: c.name,
           slug: c.slug,
+          imageUrl: c.imageUrl || null,
         }))}
         initialBrand={initialBrand}
       />

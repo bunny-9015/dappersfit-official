@@ -98,13 +98,29 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
 
   // Handle status update
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
     startTransition(async () => {
       // Optimistic update
       setOrders((prev) =>
         prev.map((o) => (o.id === orderId ? { ...o, orderStatus: newStatus } : o))
       );
 
-      const res = await updateOrderStatus(orderId, newStatus);
+      const res = await updateOrderStatus(
+        orderId,
+        newStatus,
+        targetOrder
+          ? {
+              orderNumber: targetOrder.orderNumber,
+              customerName: targetOrder.customerName,
+              customerPhone: targetOrder.customerPhone,
+              shippingAddress: targetOrder.shippingAddress,
+              paymentMethod: targetOrder.paymentMethod,
+              paymentStatus: targetOrder.paymentStatus,
+              totalAmount: targetOrder.totalAmount,
+              notes: targetOrder.notes,
+            }
+          : undefined
+      );
       if (res.success) {
         showToast(`Order status updated to "${newStatus}"`);
       } else {
@@ -120,9 +136,9 @@ export default function OrdersManager({ initialOrders }: OrdersManagerProps) {
     }
     startTransition(async () => {
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
-      const res = await deleteOrder(orderId);
+      const res = await deleteOrder(orderId, orderNumber);
       if (res.success) {
-        showToast(`Order #${orderNumber} deleted.`);
+        showToast(`Order #${orderNumber} deleted permanently.`);
       } else {
         showToast("Failed to delete order");
       }

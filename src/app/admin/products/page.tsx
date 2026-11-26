@@ -13,11 +13,15 @@ export default async function AdminProducts() {
   let dbError: string | null = null;
 
   try {
-    categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
-    products = await prisma.product.findMany({
-      include: { category: true },
-      orderBy: { createdAt: "desc" },
-    });
+    const [cats, prods] = await Promise.all([
+      prisma.category.findMany({ orderBy: { name: "asc" } }),
+      prisma.product.findMany({
+        include: { category: true },
+        orderBy: { createdAt: "desc" },
+      }),
+    ]);
+    categories = cats;
+    products = prods;
   } catch (err: any) {
     console.error("[AdminProducts] DB error:", err);
     dbError = "Could not load catalog from database. Verify DATABASE_URL is configured in Vercel.";

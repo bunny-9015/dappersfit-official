@@ -46,20 +46,40 @@ export async function submitWatchRequest(formData: FormData) {
   }
 }
 
-export async function addCategory(name: string) {
+export async function saveCategory(data: { id?: string; name: string; imageUrl?: string | null }) {
   try {
-    await prisma.category.create({
-      data: {
-        name,
-        slug: name.toLowerCase().replace(/ /g, '-'),
-      }
-    });
+    const name = String(data.name || "").trim();
+    if (!name) return { success: false, error: "Catalog name is required." };
+    const slug =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || `cat-${Date.now()}`;
+    const imageUrl = data.imageUrl ? String(data.imageUrl).trim() : null;
+
+    const category = data.id
+      ? await prisma.category.update({
+          where: { id: data.id },
+          data: { name, slug, imageUrl },
+        })
+      : await prisma.category.upsert({
+          where: { name },
+          update: { imageUrl },
+          create: { name, slug, imageUrl },
+        });
+
+    revalidatePath("/");
     revalidatePath("/catalog");
     revalidatePath("/admin/products");
-    return { success: true };
-  } catch (error) {
-    return { success: false };
+    return { success: true, category };
+  } catch (error: any) {
+    console.error("saveCategory error:", error);
+    return { success: false, error: error?.message || "Failed to save catalog." };
   }
+}
+
+export async function addCategory(name: string) {
+  return saveCategory({ name });
 }
 
 export async function saveProduct(data: {
@@ -263,12 +283,49 @@ export async function createOrder(data: {
   }
 }
 
-export async function updateOrderStatus(orderId: string, newStatus: string) {
+export async function updateOrderStatus(
+  orderId: string,
+  newStatus: string,
+  orderSnapshot?: {
+    orderNumber: string;
+    customerName?: string;
+    customerPhone?: string;
+    shippingAddress?: string;
+    paymentMethod?: string;
+    paymentStatus?: string;
+    totalAmount?: number;
+    notes?: string | null;
+  }
+) {
   try {
-    await prisma.order.update({
-      where: { id: orderId },
-      data: { orderStatus: newStatus },
+    const existing = await prisma.order.findFirst({
+      where: orderSnapshot?.orderNumber
+        ? { OR: [{ id: orderId }, { orderNumber: orderSnapshot.orderNumber }] }
+        : { id: orderId },
     });
+
+    if (existing) {
+      await prisma.order.update({
+        where: { id: existing.id },
+        data: { orderStatus: newStatus },
+      });
+    } else if (orderSnapshot?.orderNumber) {
+      // Persist status for YouPI-synced orders that weren't yet in Postgres
+      await prisma.order.create({
+        data: {
+          orderNumber: orderSnapshot.orderNumber,
+          customerName: orderSnapshot.customerName || "Online Customer",
+          customerPhone: orderSnapshot.customerPhone || "—",
+          shippingAddress: orderSnapshot.shippingAddress || "Synced from YouPI Gateway",
+          paymentMethod: orderSnapshot.paymentMethod || "youpi_upi",
+          paymentStatus: orderSnapshot.paymentStatus || "paid",
+          orderStatus: newStatus,
+          subtotal: Number(orderSnapshot.totalAmount || 0),
+          totalAmount: Number(orderSnapshot.totalAmount || 0),
+          notes: orderSnapshot.notes || null,
+        },
+      });
+    }
     revalidatePath("/admin/orders");
     revalidatePath("/account");
     return { success: true };
@@ -278,11 +335,33 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
   }
 }
 
-export async function deleteOrder(orderId: string) {
+export async function deleteOrder(orderId: string, orderNumber?: string) {
   try {
-    await prisma.order.delete({
-      where: { id: orderId },
+    const existing = await prisma.order.findFirst({
+      where: orderNumber ? { OR: [{ id: orderId }, { orderNumber }] } : { id: orderId },
     });
+
+    if (existing) {
+      // Tombstone with orderStatus="Deleted" so YouPI live sync never resurrects it on refresh
+      await prisma.order.update({
+        where: { id: existing.id },
+        data: { orderStatus: "Deleted" },
+      });
+    } else if (orderNumber) {
+      await prisma.order.create({
+        data: {
+          orderNumber,
+          customerName: "Deleted Order",
+          customerPhone: "—",
+          shippingAddress: "—",
+          paymentMethod: "youpi_upi",
+          paymentStatus: "deleted",
+          orderStatus: "Deleted",
+          subtotal: 0,
+          totalAmount: 0,
+        },
+      });
+    }
     revalidatePath("/admin/orders");
     revalidatePath("/account");
     return { success: true };

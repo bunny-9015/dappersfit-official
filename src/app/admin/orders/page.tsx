@@ -114,30 +114,37 @@ async function fetchLiveYoupiOrders(): Promise<OrderData[]> {
 export default async function AdminOrdersPage() {
   await connection();
 
-  let dbOrders: OrderData[] = [];
-  try {
-    dbOrders = await prisma.order.findMany({
-      include: { items: true },
-      orderBy: { createdAt: "desc" },
-    });
-  } catch (err) {
-    console.warn("[AdminOrdersPage] Local DB read skipped:", err);
-  }
+  const [dbOrders, youpiOrders] = await Promise.all([
+    prisma.order
+      .findMany({
+        include: { items: true },
+        orderBy: { createdAt: "desc" },
+      })
+      .catch((err) => {
+        console.warn("[AdminOrdersPage] Local DB read skipped:", err);
+        return [] as OrderData[];
+      }),
+    fetchLiveYoupiOrders(),
+  ]);
 
-  const youpiOrders = await fetchLiveYoupiOrders();
-
-  // Merge by orderNumber: live YouPI orders + any local DB-only orders, newest first
+  // Track tombstoned deleted orderNumbers so YouPI sync never resurrects them
+  const deletedOrderNumbers = new Set<string>();
   const mergedMap = new Map<string, OrderData>();
   for (const o of dbOrders) {
+    if (o.orderStatus === "Deleted") {
+      deletedOrderNumbers.add(o.orderNumber);
+      continue;
+    }
     mergedMap.set(o.orderNumber, o);
   }
   for (const y of youpiOrders) {
+    if (deletedOrderNumbers.has(y.orderNumber)) continue;
     const existing = mergedMap.get(y.orderNumber);
     if (existing) {
       mergedMap.set(y.orderNumber, {
         ...existing,
         paymentStatus: y.paymentStatus !== "pending" ? y.paymentStatus : existing.paymentStatus,
-        orderStatus: y.orderStatus === "Confirmed" ? "Confirmed" : existing.orderStatus,
+        orderStatus: existing.orderStatus !== "Pending" ? existing.orderStatus : y.orderStatus,
         notes: y.notes || existing.notes,
       });
     } else {
