@@ -1016,25 +1016,16 @@ export default function CartDrawer() {
                         <span>📄 Download / Print Invoice (PDF)</span>
                       </button>
                     )}
-                    <div className="flex flex-col sm:flex-row gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => window.open(getWhatsAppChatUrl(generateWhatsAppMessage(orderId)), "_blank")}
-                        className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition cursor-pointer"
-                      >
-                        Share Receipt on WhatsApp
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setStep("cart");
-                          setIsOpen(false);
-                        }}
-                        className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold text-xs rounded-xl transition cursor-pointer"
-                      >
-                        Continue Shopping
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep("cart");
+                        setIsOpen(false);
+                      }}
+                      className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold text-xs rounded-xl transition cursor-pointer"
+                    >
+                      Continue Shopping
+                    </button>
                   </div>
                 </div>
               )}

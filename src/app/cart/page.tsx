@@ -397,14 +397,6 @@ export default function CartPage() {
                   📄 Download / Print Invoice (PDF)
                 </button>
               )}
-              <a
-                href={getWhatsAppChatUrl(formatWhatsAppMessage(orderId, paymentId))}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition"
-              >
-                WhatsApp Receipt
-              </a>
               <Link
                 href="/"
                 className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold text-xs uppercase tracking-wider rounded-xl transition"
