@@ -85,7 +85,7 @@ export default async function Home({
             </div>
             <div className="flex flex-col items-center text-center gap-1.5 p-4 rounded-2xl bg-gray-50/80 border border-gray-100">
               <span className="w-8 h-8 rounded-full bg-amber-50 text-[#996515] border border-amber-200/70 flex items-center justify-center text-sm font-bold">⚡</span>
-              <span className="text-gray-900 font-brand font-bold text-xs tracking-wider uppercase">Instant UPI &amp; ₹300 COD</span>
+              <span className="text-gray-900 font-brand font-bold text-xs tracking-wider uppercase">Instant UPI &amp; ₹150 COD</span>
               <span className="text-[11px] text-gray-500 font-sans">Auto-verified secure checkout</span>
             </div>
             <div className="flex flex-col items-center text-center gap-1.5 p-4 rounded-2xl bg-gray-50/80 border border-gray-100">

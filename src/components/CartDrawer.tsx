@@ -8,7 +8,7 @@ import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
 import { downloadOrPrintInvoice, InvoicePayload } from "@/lib/invoice";
 
-const COD_ADVANCE_AMOUNT = 300;
+const COD_ADVANCE_AMOUNT = 150;
 
 const fmt = (val: number | string | undefined | null) => {
   const n = Number(val);
@@ -78,8 +78,8 @@ export default function CartDrawer() {
   } | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  const codAdvance = Math.min(COD_ADVANCE_AMOUNT, Math.max(0, finalTotal));
-  const codBalance = Math.max(0, finalTotal - codAdvance);
+  const codAdvance = COD_ADVANCE_AMOUNT;
+  const codBalance = Math.max(0, finalTotal);
   const payableNow = formData.paymentMethod === "cod" ? codAdvance : finalTotal;
 
   // Lock background scroll & support Escape key when popup is open
@@ -908,11 +908,11 @@ export default function CartDrawer() {
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs font-bold text-gray-900">Cash on Delivery</p>
                             <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded">
-                              ₹{codAdvance} Advance
+                              ₹{codAdvance} COD Fee
                             </span>
                           </div>
-                          <p className="text-[11px] text-gray-500 mt-0.5">Pay ₹{codAdvance} UPI now, rest on delivery</p>
-                          <p className="text-xs font-bold text-gray-900 mt-1.5">Balance COD: ₹{fmt(codBalance)}</p>
+                          <p className="text-[11px] text-gray-500 mt-0.5">Pay ₹{codAdvance} UPI fee now, full bill on delivery</p>
+                          <p className="text-xs font-bold text-gray-900 mt-1.5">Pay at Doorstep: ₹{fmt(codBalance)}</p>
                         </div>
                       </label>
                     </div>
@@ -920,15 +920,15 @@ export default function CartDrawer() {
                     {formData.paymentMethod === "cod" && (
                       <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-xs space-y-1.5">
                         <div className="flex justify-between font-semibold text-gray-900">
-                          <span>COD Advance Payable Now (via UPI)</span>
+                          <span>COD Prepaid Fee (Pay Now via UPI)</span>
                           <span className="text-[#996515]">₹{fmt(codAdvance)}</span>
                         </div>
                         <div className="flex justify-between text-gray-600">
-                          <span>Remaining Balance at Doorstep</span>
+                          <span>Payable at Doorstep (Full Order Amount)</span>
                           <span className="font-semibold text-gray-900">₹{fmt(codBalance)}</span>
                         </div>
                         <p className="text-[10px] text-amber-900/80 pt-1">
-                          ₹{codAdvance} advance prevents fake COD dispatches and is deducted from your total bill.
+                          ₹{codAdvance} is a COD handling &amp; confirmation charge. The full order amount (₹{fmt(codBalance)}) is payable in cash at delivery.
                         </p>
                       </div>
                     )}
@@ -951,7 +951,7 @@ export default function CartDrawer() {
                       <>
                         <span>
                           {formData.paymentMethod === "cod"
-                            ? `Pay ₹${fmt(codAdvance)} COD Advance via UPI`
+                            ? `Pay ₹${fmt(codAdvance)} COD Fee via UPI`
                             : `Pay ₹${fmt(payableNow)} via UPI`}
                         </span>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1058,7 +1058,7 @@ export default function CartDrawer() {
 
                 <div className="flex items-center justify-between text-[11px] text-gray-500 pt-0.5">
                   <span>🔒 256-bit Encrypted UPI</span>
-                  <span>⚡ COD available with ₹{COD_ADVANCE_AMOUNT} advance</span>
+                  <span>⚡ COD available with ₹{COD_ADVANCE_AMOUNT} prepaid fee</span>
                 </div>
               </div>
             )}

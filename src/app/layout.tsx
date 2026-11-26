@@ -94,7 +94,7 @@ export default async function RootLayout({
                   </span>
                   <span>
                     <span className="text-emerald-400 mr-1.5">⚡</span>
-                    Instant UPI &amp; ₹300 COD Advance Available Pan-India
+                    Instant UPI &amp; ₹150 COD Prepaid Available Pan-India
                   </span>
                   <span>
                     <span className="text-pink-400 mr-1.5">★</span>

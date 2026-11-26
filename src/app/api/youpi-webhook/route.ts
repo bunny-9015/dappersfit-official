@@ -46,9 +46,7 @@ export async function POST(req: NextRequest) {
         const isCodAdvance =
           existing?.paymentMethod === "cod_advance" ||
           (existing && paidNum > 0 && paidNum < existing.totalAmount);
-        const balanceDue = existing
-          ? Math.max(0, existing.totalAmount - (paidNum || 300))
-          : 0;
+        const balanceDue = existing ? existing.totalAmount : 0;
 
         await prisma.order.update({
           where: { orderNumber: cleanOrderId },
@@ -57,7 +55,7 @@ export async function POST(req: NextRequest) {
             orderStatus: "Confirmed",
             paymentMethod: isCodAdvance ? "cod_advance" : "youpi_upi",
             notes: isCodAdvance
-              ? `COD Advance ₹${paidNum || 300} Paid via YouPI | Balance ₹${balanceDue} on delivery | Ref: ${ref}`
+              ? `COD Prepaid Fee ₹${paidNum || 150} Paid via YouPI | Full Balance ₹${balanceDue} on delivery | Ref: ${ref}`
               : `YouPI Authoritative Webhook | Ref: ${ref} | Amount: ${amount || ""}`,
           },
         });

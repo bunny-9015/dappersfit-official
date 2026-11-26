@@ -51,7 +51,7 @@ export function buildInvoiceHtml(data: InvoicePayload): string {
   const locationLine = [data.city, data.state, data.pincode].filter(Boolean).join(", ");
   const isCod = data.paymentMethod === "cod" || data.paymentMethod === "cod_advance";
   const paymentModeLabel = isCod
-    ? "Cash on Delivery (₹300 UPI Advance)"
+    ? "Cash on Delivery (₹150 COD Prepaid Fee)"
     : "Prepaid Instant UPI";
 
   const rowsHtml = (data.items || [])

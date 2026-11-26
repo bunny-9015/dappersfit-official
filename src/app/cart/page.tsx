@@ -9,7 +9,7 @@ import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
 import { downloadOrPrintInvoice, InvoicePayload } from "@/lib/invoice";
 
-const COD_ADVANCE_AMOUNT = 300;
+const COD_ADVANCE_AMOUNT = 150;
 
 const fmt = (val: number | string | undefined | null) => {
   const n = Number(val);
@@ -76,8 +76,8 @@ export default function CartPage() {
   });
   const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
 
-  const codAdvance = Math.min(COD_ADVANCE_AMOUNT, Math.max(0, finalTotal));
-  const codBalance = Math.max(0, finalTotal - codAdvance);
+  const codAdvance = COD_ADVANCE_AMOUNT;
+  const codBalance = Math.max(0, finalTotal);
   const payableNow = formData.paymentMethod === "cod" ? codAdvance : finalTotal;
 
   useEffect(() => {
@@ -583,7 +583,7 @@ export default function CartPage() {
                       <div>
                         <p className="text-xs font-bold text-gray-900">Cash on Delivery</p>
                         <p className="text-[11px] text-gray-500">
-                          ₹{codAdvance} UPI advance now • ₹{fmt(codBalance)} on delivery
+                          ₹{codAdvance} UPI COD fee now • ₹{fmt(codBalance)} on delivery
                         </p>
                       </div>
                     </label>
@@ -604,7 +604,7 @@ export default function CartPage() {
                   {isProcessingPayment
                     ? "Launching Secure UPI Gateway..."
                     : formData.paymentMethod === "cod"
-                    ? `Pay ₹${fmt(codAdvance)} COD Advance via UPI`
+                    ? `Pay ₹${fmt(codAdvance)} COD Fee via UPI`
                     : `Pay ₹${fmt(payableNow)} via UPI`}
                 </button>
               </form>
@@ -727,11 +727,11 @@ export default function CartPage() {
                   {formData.paymentMethod === "cod" && (
                     <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs space-y-1">
                       <div className="flex justify-between font-bold text-gray-900">
-                        <span>Pay Now (COD Advance)</span>
+                        <span>Pay Now (COD Prepaid Fee)</span>
                         <span className="text-[#996515]">₹{fmt(codAdvance)}</span>
                       </div>
                       <div className="flex justify-between text-gray-600">
-                        <span>Balance at Doorstep</span>
+                        <span>Payable at Doorstep (Full Bill)</span>
                         <span>₹{fmt(codBalance)}</span>
                       </div>
                     </div>

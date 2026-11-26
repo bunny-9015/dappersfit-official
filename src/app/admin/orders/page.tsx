@@ -25,7 +25,7 @@ async function fetchLiveYoupiOrders(): Promise<OrderData[]> {
       const paidAmount = Number(p.amountPaise || 0) / 100;
       const isCodAdvance = meta.paymentMode === "COD_ADVANCE";
       const totalAmount = Number(meta.orderTotal || paidAmount || 0);
-      const balanceDue = isCodAdvance ? Number(meta.codBalanceDue ?? Math.max(0, totalAmount - paidAmount)) : 0;
+      const balanceDue = isCodAdvance ? Number(meta.codBalanceDue ?? totalAmount) : 0;
 
       const statusUpper = String(p.status || "").toUpperCase();
       const isPaid =
@@ -75,7 +75,7 @@ async function fetchLiveYoupiOrders(): Promise<OrderData[]> {
       const notesParts = [
         `YouPI ${p.status}`,
         p.verificationTag && p.verificationTag !== "UNVERIFIED" ? p.verificationTag : "",
-        isCodAdvance ? `COD Advance ₹${paidAmount} | Balance ₹${balanceDue} on delivery` : "",
+        isCodAdvance ? `COD Fee ₹${paidAmount} | Balance ₹${balanceDue} on delivery` : "",
         meta.includeOgRolexBox ? "+ OG Rolex Box" : "",
       ].filter(Boolean);
 
