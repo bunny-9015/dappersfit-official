@@ -62,39 +62,127 @@ export async function addCategory(name: string) {
   }
 }
 
-export async function addProduct(formData: FormData) {
+export async function saveProduct(data: {
+  id?: string;
+  name: string;
+  brand: string;
+  price: number;
+  description: string;
+  categoryId?: string;
+  newCategory?: string;
+  images: string[];
+  inStock: boolean;
+  quantity: number;
+  preBookingAvailable?: boolean;
+  expectedDeliveryDate?: string | null;
+}) {
   try {
-    let categoryId = formData.get("categoryId") as string;
-    
-    // Auto-create category if "new_category" is used
-    if (!categoryId || categoryId === "new") {
-      const newCatName = formData.get("newCategory") as string || formData.get("brand") as string;
-      const cat = await prisma.category.upsert({
-        where: { name: newCatName },
-        update: {},
-        create: { name: newCatName, slug: newCatName.toLowerCase().replace(/ /g, '-') }
-      });
-      categoryId = cat.id;
+    const name = String(data.name || "").trim();
+    const brand = String(data.brand || "").trim();
+    const price = Number(data.price);
+    const description = String(data.description || "").trim();
+
+    if (!name || !brand || isNaN(price) || price <= 0) {
+      return { success: false, error: "Name, brand, and a valid price are required." };
     }
 
-    await prisma.product.create({
-      data: {
-        name: formData.get("name") as string,
-        brand: formData.get("brand") as string,
-        price: parseFloat(formData.get("price") as string),
-        description: formData.get("description") as string,
-        categoryId: categoryId,
-        inStock: formData.get("inStock") === "on",
-        quantity: parseInt(formData.get("quantity") as string) || 1,
+    let categoryId = String(data.categoryId || "").trim();
+    if (!categoryId || categoryId === "new") {
+      const catName = String(data.newCategory || brand).trim();
+      const slug = catName
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || `cat-${Date.now()}`;
+      const existing = await prisma.category.findFirst({
+        where: { OR: [{ name: catName }, { slug }] },
+      });
+      if (existing) {
+        categoryId = existing.id;
+      } else {
+        const created = await prisma.category.create({ data: { name: catName, slug } });
+        categoryId = created.id;
       }
-    });
+    }
+
+    const cleanImages = (Array.isArray(data.images) ? data.images : [])
+      .map((u) => String(u || "").trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    const primaryImage = cleanImages[0] || null;
+    const expectedDate = data.expectedDeliveryDate ? new Date(data.expectedDeliveryDate) : null;
+
+    const payload = {
+      name,
+      brand,
+      price,
+      description: description || `${brand} ${name}`,
+      imageUrl: primaryImage,
+      images: cleanImages,
+      categoryId,
+      inStock: Boolean(data.inStock),
+      quantity: Math.max(0, Number(data.quantity) || 0),
+      preBookingAvailable: Boolean(data.preBookingAvailable),
+      expectedDeliveryDate: expectedDate && !isNaN(expectedDate.getTime()) ? expectedDate : null,
+    };
+
+    const product = data.id
+      ? await prisma.product.update({
+          where: { id: data.id },
+          data: payload,
+          include: { category: true },
+        })
+      : await prisma.product.create({
+          data: payload,
+          include: { category: true },
+        });
+
+    revalidatePath("/");
+    revalidatePath("/catalog");
+    revalidatePath("/admin/products");
+    return { success: true, product };
+  } catch (error: any) {
+    console.error("saveProduct error:", error);
+    return { success: false, error: error?.message || "Failed to save product." };
+  }
+}
+
+export async function deleteProduct(id: string) {
+  try {
+    await prisma.product.delete({ where: { id } });
+    revalidatePath("/");
     revalidatePath("/catalog");
     revalidatePath("/admin/products");
     return { success: true };
-  } catch (error) {
-    console.error(error);
-    return { success: false };
+  } catch (error: any) {
+    console.error("deleteProduct error:", error);
+    return { success: false, error: error?.message || "Failed to delete product." };
   }
+}
+
+export async function toggleProductStock(id: string, inStock: boolean) {
+  try {
+    await prisma.product.update({ where: { id }, data: { inStock } });
+    revalidatePath("/");
+    revalidatePath("/catalog");
+    revalidatePath("/admin/products");
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error?.message || "Failed to update stock." };
+  }
+}
+
+export async function addProduct(formData: FormData) {
+  return saveProduct({
+    name: String(formData.get("name") || ""),
+    brand: String(formData.get("brand") || ""),
+    price: parseFloat(String(formData.get("price") || "0")),
+    description: String(formData.get("description") || ""),
+    categoryId: String(formData.get("categoryId") || "new"),
+    newCategory: String(formData.get("newCategory") || ""),
+    images: String(formData.get("imageUrl") || "") ? [String(formData.get("imageUrl"))] : [],
+    inStock: formData.get("inStock") === "on",
+    quantity: parseInt(String(formData.get("quantity") || "1"), 10) || 1,
+  });
 }
 
 export async function createOrder(data: {

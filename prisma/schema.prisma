@@ -39,7 +39,8 @@ model Product {
   price                Float
   description          String
   imageUrl             String?
-  inStock              Boolean  @default(true)
+  images               String[]  @default([])
+  inStock              Boolean   @default(true)
   quantity             Int      @default(1)
   expectedDeliveryDate DateTime?
   preBookingAvailable  Boolean  @default(false)

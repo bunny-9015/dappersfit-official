@@ -44,6 +44,12 @@ export default function WatchInspectionModal({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<"specs" | "delivery" | "authenticity">("specs");
   const [addedToast, setAddedToast] = useState<boolean>(false);
+  const [activeImageIdx, setActiveImageIdx] = useState<number>(0);
+
+  const galleryImages = Array.from(
+    new Set([product?.imageUrl, ...(product?.images || [])].filter(Boolean) as string[])
+  );
+  const activeImageSrc = galleryImages[activeImageIdx] || product?.imageUrl || null;
 
   const imageContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -62,6 +68,7 @@ export default function WatchInspectionModal({
     setTransformOrigin("50% 50%");
     setActiveTab("specs");
     setAddedToast(false);
+    setActiveImageIdx(0);
   }, [product]);
 
   if (!product) return null;
@@ -244,7 +251,7 @@ export default function WatchInspectionModal({
             }`}
             style={{ minHeight: "360px" }}
           >
-            {product.imageUrl ? (
+            {activeImageSrc ? (
               <div
                 className="w-full h-full max-h-[500px] flex items-center justify-center transition-transform duration-150 ease-out will-change-transform transform-gpu"
                 style={{
@@ -254,7 +261,7 @@ export default function WatchInspectionModal({
                 }}
               >
                 <img
-                  src={product.imageUrl}
+                  src={activeImageSrc}
                   alt={product.name}
                   decoding="async"
                   className="max-w-full max-h-[480px] object-contain drop-shadow-[0_15px_30px_rgba(0,0,0,0.15)] filter brightness-[1.02] contrast-[1.05]"
@@ -267,6 +274,29 @@ export default function WatchInspectionModal({
               </div>
             )}
           </div>
+
+          {/* Multi-Angle Thumbnail Strip */}
+          {galleryImages.length > 1 && (
+            <div className="px-4 py-2.5 bg-white/90 border-t border-gray-200/80 flex items-center gap-2 overflow-x-auto no-scrollbar z-20">
+              {galleryImages.map((imgSrc, idx) => (
+                <button
+                  key={`${idx}-${imgSrc.slice(0, 24)}`}
+                  type="button"
+                  onClick={() => {
+                    setActiveImageIdx(idx);
+                    setZoomLevel(1);
+                  }}
+                  className={`w-14 h-14 rounded-xl bg-gray-50 border p-1 shrink-0 flex items-center justify-center cursor-pointer transition ${
+                    idx === activeImageIdx
+                      ? "border-gray-900 ring-1 ring-gray-900"
+                      : "border-gray-200 hover:border-gray-400 opacity-75 hover:opacity-100"
+                  }`}
+                >
+                  <img src={imgSrc} alt={`${product.name} view ${idx + 1}`} className="w-full h-full object-contain" />
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Zoom Controls Bar at Bottom of Image */}
           <div className="p-4 bg-white/95 backdrop-blur-md border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 z-20">

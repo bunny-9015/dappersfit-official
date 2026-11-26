@@ -111,6 +111,7 @@ export default async function Home({
           price: p.price,
           description: p.description,
           imageUrl: p.imageUrl,
+          images: Array.isArray(p.images) ? p.images : [],
           inStock: p.inStock,
           quantity: p.quantity,
           categoryId: p.categoryId,

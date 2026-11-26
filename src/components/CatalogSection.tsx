@@ -15,6 +15,7 @@ export interface ProductData {
   price: number;
   description: string;
   imageUrl: string | null;
+  images?: string[];
   inStock: boolean;
   quantity: number;
   categoryId: string;
