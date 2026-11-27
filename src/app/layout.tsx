@@ -71,6 +71,19 @@ export default async function RootLayout({
     <html lang="en" data-scroll-behavior="smooth" className={`${cinzel.variable} ${playfair.variable} ${montserrat.variable} ${jakarta.variable} ${spaceGrotesk.variable}`}>
       <head>
         <link rel="preload" href="/showcase.mp4?v=3" as="video" type="video/mp4" />
+        {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
+          <Script id="meta-pixel" strategy="afterInteractive">
+            {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${process.env.NEXT_PUBLIC_META_PIXEL_ID}');fbq('track','PageView');`}
+          </Script>
+        )}
+        {process.env.NEXT_PUBLIC_GA_ID && (
+          <>
+            <Script src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`} strategy="afterInteractive" />
+            <Script id="ga4-init" strategy="afterInteractive">
+              {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${process.env.NEXT_PUBLIC_GA_ID}');`}
+            </Script>
+          </>
+        )}
       </head>
       <body className="font-sans bg-gray-50 flex flex-col min-h-screen text-gray-900 antialiased">
         <CartProvider>
@@ -232,7 +245,10 @@ export default async function RootLayout({
                 <h3 className="text-xs font-brand font-bold uppercase tracking-widest text-[#D4AF37]">Customer Service</h3>
                 <ul className="mt-4 space-y-3 text-xs font-sans">
                   <li><Link href="/contact" className="text-gray-400 hover:text-white transition">Contact Us</Link></li>
-                  <li><Link href="/gift-services" className="text-gray-400 hover:text-white transition">Gift Services</Link></li>
+                  <li><Link href="/shipping-policy" className="text-gray-400 hover:text-white transition">Shipping Policy</Link></li>
+                  <li><Link href="/refund-policy" className="text-gray-400 hover:text-white transition">Replacement &amp; Refund Policy</Link></li>
+                  <li><Link href="/terms" className="text-gray-400 hover:text-white transition">Terms &amp; Order Guidelines</Link></li>
+                  <li><Link href="/request-watch" className="text-gray-400 hover:text-white transition">Request a Watch</Link></li>
                 </ul>
               </div>
 
@@ -262,8 +278,11 @@ export default async function RootLayout({
                       <span>Instagram: @dappers_fit_</span>
                     </a>
                   </li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition">Facebook</a></li>
-                  <li><a href="#" className="text-gray-400 hover:text-white transition">YouTube</a></li>
+                  <li>
+                    <a href="mailto:dappersfit@gmail.com" className="text-gray-400 hover:text-white transition">
+                      Email: dappersfit@gmail.com
+                    </a>
+                  </li>
                 </ul>
               </div>
 

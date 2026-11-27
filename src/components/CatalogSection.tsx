@@ -370,6 +370,15 @@ export default function CatalogSection({
                         </span>
                       </div>
 
+                      {/* Automatic Highlight Tag */}
+                      {/automatic/i.test(`${product.name} ${product.description || ""}`) && (
+                        <div className="absolute top-3 left-3">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-black tracking-wider uppercase rounded-full bg-amber-500 text-white shadow-sm">
+                            ⚙ AUTOMATIC
+                          </span>
+                        </div>
+                      )}
+
                       {/* Stock Tag */}
                       <div className="absolute top-3 right-3">
                         {product.inStock ? (

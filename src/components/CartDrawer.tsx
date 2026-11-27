@@ -7,6 +7,8 @@ import PriceTag from "./PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
 import { downloadOrPrintInvoice, InvoicePayload } from "@/lib/invoice";
+import TermsAcceptanceModal from "@/components/TermsAcceptanceModal";
+import { trackStoreEvent } from "@/lib/policies";
 
 const COD_ADVANCE_AMOUNT = 150;
 
@@ -57,6 +59,7 @@ export default function CartDrawer() {
     paymentMethod: "upi" as "upi" | "cod",
   });
 
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [showYoupiModal, setShowYoupiModal] = useState(false);
   const [youpiOrderData, setYoupiOrderData] = useState<{
     orderNumber: string;
@@ -181,15 +184,23 @@ export default function CartDrawer() {
     window.open(getWhatsAppChatUrl(generateWhatsAppMessage(id)), "_blank");
   };
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+  const handlePlaceOrder = (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentError(null);
     if (!validateForm()) return;
+    setShowTermsModal(true);
+  };
+
+  const executeOrderPayment = async () => {
+    setShowTermsModal(false);
+    setPaymentError(null);
 
     const newId = `DF-${Math.floor(100000 + Math.random() * 900000)}`;
     const isCod = formData.paymentMethod === "cod";
     const chargeAmount = isCod ? codAdvance : finalTotal;
     const balanceDue = isCod ? codBalance : 0;
+
+    trackStoreEvent("InitiateCheckout", { value: chargeAmount, orderId: newId, numItems: totalCount });
 
     setOrderId(newId);
     setIsInitiatingPayment(true);
@@ -340,6 +351,11 @@ export default function CartDrawer() {
 
   const handleYoupiPaymentSuccess = (_paymentId: string) => {
     setShowYoupiModal(false);
+    trackStoreEvent("Purchase", {
+      value: confirmedSummary?.paidNow ?? payableNow,
+      orderId: orderId || undefined,
+      numItems: totalCount || 1,
+    });
     setStep("success");
     clearCart();
   };
@@ -1065,6 +1081,18 @@ export default function CartDrawer() {
           </div>
         </div>
       )}
+
+      {/* Mandatory Terms & Order Guidelines Modal before Payment */}
+      <TermsAcceptanceModal
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={executeOrderPayment}
+        payableLabel={
+          formData.paymentMethod === "cod"
+            ? `Pay ₹${fmt(codAdvance)} COD Fee via UPI`
+            : `Pay ₹${fmt(payableNow)} via UPI`
+        }
+      />
 
       {/* Fallback Embedded YouPI Modal */}
       {youpiOrderData && (

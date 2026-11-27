@@ -364,6 +364,13 @@ export default function WatchInspectionModal({
               <h2 className="text-2xl sm:text-3xl font-display font-bold text-gray-900 mt-1 leading-tight">
                 {product.name}
               </h2>
+              {/automatic/i.test(`${product.name} ${product.description || ""}`) && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500 text-white text-[11px] font-black uppercase tracking-widest shadow-sm">
+                    ⚙ AUTOMATIC MOVEMENT
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Price Box */}
