@@ -283,6 +283,39 @@ export async function createOrder(data: {
   }
 }
 
+export async function confirmOrderPayment(
+  orderNumber: string,
+  paymentRef?: string,
+  isCodFee?: boolean
+) {
+  try {
+    const clean = String(orderNumber || "").trim();
+    if (!clean) return { success: false };
+    const session = await getCurrentSession();
+    const existing = await prisma.order.findUnique({ where: { orderNumber: clean } });
+    if (!existing) return { success: false };
+
+    await prisma.order.update({
+      where: { orderNumber: clean },
+      data: {
+        paymentStatus: isCodFee ? "partial_paid" : "paid",
+        orderStatus: "Confirmed",
+        ...(session?.userId && !existing.userId ? { userId: session.userId } : {}),
+        ...(session?.email && !existing.customerEmail ? { customerEmail: session.email } : {}),
+        notes: isCodFee
+          ? `COD Prepaid Fee ₹150 Paid via YouPI | Full Balance ₹${existing.totalAmount} on delivery | Ref: ${paymentRef || "youpi_verified"}`
+          : `Paid via YouPI UPI | Ref: ${paymentRef || "youpi_verified"}`,
+      },
+    });
+    revalidatePath("/account");
+    revalidatePath("/admin/orders");
+    return { success: true };
+  } catch (error) {
+    console.error("confirmOrderPayment error:", error);
+    return { success: false };
+  }
+}
+
 export async function updateOrderStatus(
   orderId: string,
   newStatus: string,

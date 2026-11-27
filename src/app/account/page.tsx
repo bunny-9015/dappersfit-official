@@ -16,21 +16,28 @@ export default async function AccountPage() {
     redirect("/login?redirect=/account");
   }
 
-  // Fetch full user data
-  const user = await prisma.user.findUnique({
-    where: { id: session.userId },
+  // Fetch full user data (match by id or email so master admin & OAuth users always resolve)
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [{ id: session.userId }, { email: session.email }],
+    },
   });
 
   if (!user) {
     redirect("/login?redirect=/account");
   }
 
-  // Fetch orders associated with this user (by userId or matching email)
+  // Fetch orders associated with this user (by userId or matching email), excluding deleted orders
   const orders = await prisma.order.findMany({
     where: {
-      OR: [
-        { userId: user.id },
-        { customerEmail: user.email },
+      AND: [
+        { orderStatus: { not: "Deleted" } },
+        {
+          OR: [
+            { userId: user.id },
+            { customerEmail: { equals: user.email, mode: "insensitive" } },
+          ],
+        },
       ],
     },
     include: {

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
-import { createOrder, getUserSession } from "@/app/actions";
+import { createOrder, getUserSession, confirmOrderPayment } from "@/app/actions";
 import PriceTag from "@/components/PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
@@ -59,6 +59,14 @@ export default function CartPage() {
 
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showYoupiModal, setShowYoupiModal] = useState(false);
+  const [userSession, setUserSession] = useState<{
+    userId: string;
+    email: string;
+    name: string;
+    role: string;
+  } | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const activeOrderRef = useRef<{ orderNumber: string; isCod: boolean }>({ orderNumber: "", isCod: false });
   const [youpiOrderData, setYoupiOrderData] = useState<{
     orderNumber: string;
     amount: number;
@@ -86,6 +94,8 @@ export default function CartPage() {
   useEffect(() => {
     getUserSession()
       .then((session) => {
+        setUserSession(session || null);
+        setSessionChecked(true);
         if (session) {
           setFormData((prev) => ({
             ...prev,
@@ -94,15 +104,19 @@ export default function CartPage() {
           }));
         }
       })
-      .catch(() => {});
+      .catch(() => setSessionChecked(true));
   }, []);
 
   const handleYoupiPaymentSuccess = (pId: string) => {
     setPaymentId(pId);
     setShowYoupiModal(false);
+    const refOrder = activeOrderRef.current.orderNumber || orderId;
+    if (refOrder) {
+      confirmOrderPayment(refOrder, pId, activeOrderRef.current.isCod).catch(() => {});
+    }
     trackStoreEvent("Purchase", {
       value: confirmedSummary?.paidNow ?? payableNow,
-      orderId: orderId || undefined,
+      orderId: refOrder || undefined,
       numItems: totalCount || 1,
     });
     setOrderConfirmed(true);
@@ -182,15 +196,17 @@ export default function CartPage() {
     trackStoreEvent("InitiateCheckout", { value: chargeAmount, orderId: newId, numItems: totalCount });
 
     setOrderId(newId);
+    activeOrderRef.current = { orderNumber: newId, isCod };
     setIsProcessingPayment(true);
 
     try {
       try {
         await createOrder({
           orderNumber: newId,
+          userId: userSession?.userId,
           customerName: formData.fullName,
           customerPhone: formData.phone,
-          customerEmail: formData.email || undefined,
+          customerEmail: formData.email || userSession?.email || undefined,
           shippingAddress: formData.address,
           city: formData.city || undefined,
           state: formData.state || undefined,
@@ -414,6 +430,12 @@ export default function CartPage() {
                 </button>
               )}
               <Link
+                href="/account"
+                className="px-6 py-3 bg-amber-50 hover:bg-amber-100 text-[#996515] border border-amber-200 font-bold text-xs uppercase tracking-wider rounded-xl transition"
+              >
+                View in My Orders
+              </Link>
+              <Link
                 href="/"
                 className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-900 font-bold text-xs uppercase tracking-wider rounded-xl transition"
               >
@@ -480,7 +502,26 @@ export default function CartPage() {
                 </div>
               </div>
 
-              {/* Shipping & Payment Form */}
+              {/* Shipping & Payment Form (Login Required) */}
+              {sessionChecked && !userSession ? (
+                <div className="bg-white rounded-3xl border border-gray-200 p-8 text-center space-y-4 shadow-xs">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 border border-amber-200 text-[#996515] flex items-center justify-center text-2xl">
+                    🔒
+                  </div>
+                  <h2 className="text-xl font-serif font-bold text-gray-900">
+                    Sign In Required to Place Order
+                  </h2>
+                  <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                    Sign in or create an account first so your order &amp; invoice automatically appear in <strong>My Orders</strong>.
+                  </p>
+                  <Link
+                    href="/login?redirect=/cart&error=login_required"
+                    className="inline-block px-7 py-3.5 bg-gray-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition"
+                  >
+                    Sign In / Create Account →
+                  </Link>
+                </div>
+              ) : (
               <form onSubmit={handleProceedOrder} className="bg-white rounded-3xl border border-gray-200 p-6 space-y-5 shadow-xs">
                 <h2 className="text-lg font-serif font-bold text-gray-900 border-b border-gray-100 pb-3">
                   Shipping &amp; Payment
@@ -624,6 +665,7 @@ export default function CartPage() {
                     : `Pay ₹${fmt(payableNow)} via UPI`}
                 </button>
               </form>
+              )}
             </div>
 
             {/* Right: Sticky Summary */}

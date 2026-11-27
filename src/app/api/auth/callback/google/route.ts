@@ -78,7 +78,9 @@ export async function GET(request: Request) {
       role: user.role as "CUSTOMER" | "ADMIN",
     });
 
-    const dest = user.role === "ADMIN" ? "/admin/orders" : "/account";
+    const stateDest = searchParams.get("state") || "";
+    const safeStateDest = stateDest.startsWith("/") && !stateDest.startsWith("//") ? stateDest : "";
+    const dest = user.role === "ADMIN" ? "/admin/orders" : (safeStateDest || "/account");
     return NextResponse.redirect(new URL(dest, request.url));
   } catch (err) {
     console.error("Google OAuth callback error:", err);

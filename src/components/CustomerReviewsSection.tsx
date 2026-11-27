@@ -430,13 +430,13 @@ export default function CustomerReviewsSection() {
             </div>
             <div className="space-y-1">
               <span className="text-[#D4AF37] text-2xl font-bold">✓</span>
-              <h4 className="text-sm font-brand font-bold text-white uppercase tracking-wider">Open Box Video Inspection</h4>
-              <p className="text-xs font-sans text-gray-400">Complete video proof of quality before final dispatch.</p>
+              <h4 className="text-sm font-brand font-bold text-white uppercase tracking-wider">Pre-Dispatch Quality Check</h4>
+              <p className="text-xs font-sans text-gray-400">Multi-point QC inspection &amp; secure tamper-evident packaging before dispatch.</p>
             </div>
             <div className="space-y-1">
               <span className="text-[#D4AF37] text-2xl font-bold">✓</span>
-              <h4 className="text-sm font-brand font-bold text-white uppercase tracking-wider">COD & Online Payments</h4>
-              <p className="text-xs font-sans text-gray-400">Pay via UPI, Cards, Net Banking, or Cash on Delivery.</p>
+              <h4 className="text-sm font-brand font-bold text-white uppercase tracking-wider">Instant UPI &amp; COD</h4>
+              <p className="text-xs font-sans text-gray-400">Pay via Instant UPI or Cash on Delivery (₹150 prepaid fee).</p>
             </div>
           </div>
         </div>

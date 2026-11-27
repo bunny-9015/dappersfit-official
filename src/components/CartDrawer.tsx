@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { useCart } from "@/context/CartContext";
-import { createOrder } from "@/app/actions";
+import { createOrder, getUserSession, confirmOrderPayment } from "@/app/actions";
 import PriceTag from "./PriceTag";
 import { getWhatsAppChatUrl } from "@/lib/whatsapp";
 import YoupiModal from "@/components/YoupiModal";
@@ -46,6 +47,14 @@ export default function CartDrawer() {
   } = useCart();
 
   const [step, setStep] = useState<"cart" | "checkout" | "success">("cart");
+  const [userSession, setUserSession] = useState<{
+    userId: string;
+    email: string;
+    name: string;
+    role: string;
+  } | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
+  const activeOrderRef = useRef<{ orderNumber: string; isCod: boolean }>({ orderNumber: "", isCod: false });
   const [promoInput, setPromoInput] = useState("");
   const [promoFeedback, setPromoFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -84,6 +93,23 @@ export default function CartDrawer() {
   const codAdvance = COD_ADVANCE_AMOUNT;
   const codBalance = Math.max(0, finalTotal);
   const payableNow = formData.paymentMethod === "cod" ? codAdvance : finalTotal;
+
+  // Load user session whenever cart opens so checkout requires login & prefills customer details
+  useEffect(() => {
+    if (!isOpen) return;
+    getUserSession()
+      .then((sess) => {
+        setUserSession(sess || null);
+        setSessionChecked(true);
+        if (sess) {
+          setFormData((prev) => ({
+            ...prev,
+            fullName: prev.fullName || sess.name || "",
+          }));
+        }
+      })
+      .catch(() => setSessionChecked(true));
+  }, [isOpen]);
 
   // Lock background scroll & support Escape key when popup is open
   useEffect(() => {
@@ -203,14 +229,17 @@ export default function CartDrawer() {
     trackStoreEvent("InitiateCheckout", { value: chargeAmount, orderId: newId, numItems: totalCount });
 
     setOrderId(newId);
+    activeOrderRef.current = { orderNumber: newId, isCod };
     setIsInitiatingPayment(true);
 
     try {
       try {
         await createOrder({
           orderNumber: newId,
+          userId: userSession?.userId,
           customerName: formData.fullName,
           customerPhone: formData.phone,
+          customerEmail: userSession?.email,
           shippingAddress: formData.address,
           city: formData.city,
           state: formData.state,
@@ -349,11 +378,15 @@ export default function CartDrawer() {
     }
   };
 
-  const handleYoupiPaymentSuccess = (_paymentId: string) => {
+  const handleYoupiPaymentSuccess = (paymentId: string) => {
     setShowYoupiModal(false);
+    const refOrder = activeOrderRef.current.orderNumber || orderId;
+    if (refOrder) {
+      confirmOrderPayment(refOrder, paymentId, activeOrderRef.current.isCod).catch(() => {});
+    }
     trackStoreEvent("Purchase", {
       value: confirmedSummary?.paidNow ?? payableNow,
-      orderId: orderId || undefined,
+      orderId: refOrder || undefined,
       numItems: totalCount || 1,
     });
     setStep("success");
@@ -777,8 +810,31 @@ export default function CartDrawer() {
                 </>
               )}
 
-              {/* STEP 2: CHECKOUT FORM */}
-              {step === "checkout" && (
+              {/* STEP 2: CHECKOUT FORM (LOGIN REQUIRED) */}
+              {step === "checkout" && sessionChecked && !userSession && (
+                <div className="text-center py-10 space-y-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 border border-amber-200 text-[#996515] flex items-center justify-center text-2xl">
+                    🔒
+                  </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-lg font-serif font-bold text-gray-900">
+                      Sign In Required to Place Order
+                    </h3>
+                    <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed">
+                      Please sign in or create a free account so your order, invoice, and live tracking automatically appear in <strong>My Orders</strong>.
+                    </p>
+                  </div>
+                  <Link
+                    href="/login?redirect=/cart&error=login_required"
+                    onClick={() => setIsOpen(false)}
+                    className="inline-block px-7 py-3.5 bg-gray-900 hover:bg-black text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-md transition"
+                  >
+                    Sign In / Create Account →
+                  </Link>
+                </div>
+              )}
+
+              {step === "checkout" && (!sessionChecked || userSession) && (
                 <form onSubmit={handlePlaceOrder} className="space-y-5">
                   {/* Compact Total Bar */}
                   <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between text-xs">
@@ -1032,6 +1088,16 @@ export default function CartDrawer() {
                         <span>📄 Download / Print Invoice (PDF)</span>
                       </button>
                     )}
+                    <Link
+                      href="/account"
+                      onClick={() => {
+                        setStep("cart");
+                        setIsOpen(false);
+                      }}
+                      className="block w-full py-3 bg-amber-50 hover:bg-amber-100 text-[#996515] border border-amber-200 font-bold text-xs uppercase tracking-wider rounded-xl transition text-center"
+                    >
+                      View in My Orders
+                    </Link>
                     <button
                       type="button"
                       onClick={() => {
